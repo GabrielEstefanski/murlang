@@ -1,0 +1,16 @@
+[package]
+name = "mur_lang"
+version = "0.1.0"
+edition = "2024"
+authors = ["Seu Nome <seu.email@exemplo.com>"]
+description = "Uma linguagem de programação inspirada em Murlocs"
+
+[[bin]]
+name = "mur_lang"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.28", features = ["full"] }
+rayon = "1.7"
+futures = "0.3" 
+num-bigint = "0.4"
