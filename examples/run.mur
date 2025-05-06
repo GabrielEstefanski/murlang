@@ -1,0 +1,54 @@
+grrr name = "Mrglglgl"
+grrr age = 42
+
+grrrfnrrg greeting(name)
+mrgl
+    glglrr "Hello, " + name + "!"
+grl
+
+rrkgr Murloc
+mrgl
+    name: blbtxt,
+    level: numblrr,
+    health: numblrr,
+grl
+
+grrip types ["Coastal", "Deep", "Warrior"]
+
+grlbrr (age > 30)
+mrgl
+    glglrr name + " is a wise murloc!"
+grl
+blrrgl
+mrgl
+    glglrr name + " is a young murloc!"
+grl
+
+gglrbl (age > 40)
+mrgl
+    glglrr "Countdown: " + age
+    age = age - 1
+
+    grlbrr age < 40
+    mrgl
+        blgrrstop
+    grl
+grl
+
+grrrblbl greeting(name)
+
+grrr chief_murloc = Murloc { name: "Grrmrgl", level: 10, health: 100 }
+glglrr "Chief murloc: " + chief_murloc.name + ", Level: " + chief_murloc.level
+
+splurg
+mrgl
+    glglrr "Running on a separate thread..."
+    grrr counter = 0
+    gglrbl (counter < 3)
+    mrgl
+        glglrr "Thread counter: " + counter
+        counter = counter + 1
+    grl
+grl
+
+glglrr "Program finished!"
