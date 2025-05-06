@@ -48,6 +48,7 @@ pub enum Statement {
         name: String,
         args: Vec<String>,
         body: Vec<Statement>,
+        parent_scope: Option<Vec<String>>,
     },
     CallFunction {
         name: String,
@@ -84,34 +85,10 @@ pub enum Statement {
         name: String,
         args: Vec<String>,
         body: Vec<Statement>,
+        parent_scope: Option<Vec<String>>,
     },
     Sync {
         name: String,
-    },
-    FishArray {
-        name: String,
-        elements: Vec<Value>,
-        operation: FishOperation,
-    },
-    BubbleString {
-        name: String,
-        value: String,
-        format: BubbleFormat,
-    },
-    TideFlow {
-        source: Expression,
-        destination: Expression,
-        operation: TideOperation,
-    },
-    ShellStruct {
-        name: String,
-        fields: Vec<(String, Type)>,
-        protection: ProtectionLevel,
-    },
-    WaveString {
-        name: String,
-        parts: Vec<Expression>,
-        operation: WaveOperation,
     },
     WhenStatement {
         condition: Expression,
@@ -122,31 +99,6 @@ pub enum Statement {
         try_block: Vec<Statement>,
         catch_blocks: Vec<(String, Vec<Statement>)>,
     },
-    SwimLoop {
-        variable: String,
-        collection: Expression,
-        body: Vec<Statement>,
-    },
-    SchoolBlock {
-        name: String,
-        members: Vec<Statement>,
-    },
-    SplashIO {
-        operation: SplashOperation,
-        target: Expression,
-    },
-    CurrentFlow {
-        source: Expression,
-        operation: CurrentOperation,
-    },
-    PearlValue {
-        name: String,
-        value: Expression,
-    },
-    CoralStructure {
-        name: String,
-        elements: Vec<(String, Type)>,
-    },
 }
 
 #[derive(Debug, Clone)]
@@ -155,6 +107,17 @@ pub enum Type {
     Text,
     Array(Box<Type>),
     Struct(String),
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Type::Number => write!(f, "Number"),
+            Type::Text => write!(f, "Text"),
+            Type::Array(t) => write!(f, "Array<{}>", t),
+            Type::Struct(name) => write!(f, "{}", name),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -186,15 +149,16 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             },
-            Value::Struct(name, fields) => {
-                write!(f, "{} {{", name)?;
-                for (i, (field, value)) in fields.iter().enumerate() {
-                    if i > 0 {
+            Value::Struct(_, fields) => {
+                let mut first = true;
+                for (field, value) in fields {
+                    if !first {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}: {}", field, value)?;
+                    write!(f, "{}", value)?;
+                    first = false;
                 }
-                write!(f, "}}")
+                Ok(())
             },
             Value::Future(_) => write!(f, "<future>"),
             Value::Thread(name) => write!(f, "<thread:{}>", name),
@@ -210,7 +174,7 @@ impl Expression {
                 if let Some(value) = env.get(name) {
                     Ok(value.clone())
                 } else {
-                    Err(ParseError::InvalidValue(format!("Variável não encontrada: {}", name)))
+                    Err(ParseError::InvalidValue(format!("Variable '{}' lost in the cosmic void", name)))
                 }
             },
             Expression::BinaryOp { left, right, op } => {
@@ -222,35 +186,35 @@ impl Expression {
                         (Value::Text(a), Value::Text(b)) => Ok(Value::Text(format!("{}{}", a, b))),
                         (Value::Text(a), Value::Number(b)) => Ok(Value::Text(format!("{}{}", a, b))),
                         (Value::Number(a), Value::Text(b)) => Ok(Value::Text(format!("{}{}", a, b))),
-                        _ => Err(ParseError::InvalidValue("Operação de adição inválida".to_string())),
+                        _ => Err(ParseError::InvalidValue("Invalid addition operation in the cosmic void".to_string())),
                     },
                     BinaryOperator::Subtract => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
-                        _ => Err(ParseError::InvalidValue("Operação de subtração inválida".to_string())),
+                        _ => Err(ParseError::InvalidValue("Invalid subtraction operation in the cosmic void".to_string())),
                     },
                     BinaryOperator::Multiply => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
-                        _ => Err(ParseError::InvalidValue("Operação de multiplicação inválida".to_string())),
+                        _ => Err(ParseError::InvalidValue("Invalid multiplication operation in the cosmic void".to_string())),
                     },
                     BinaryOperator::Divide => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => {
                             if *b == 0 {
-                                Err(ParseError::InvalidValue("Divisão por zero".to_string()))
+                                Err(ParseError::InvalidValue("Attempted to divide by the void".to_string()))
                             } else {
                                 Ok(Value::Number(a / b))
                             }
                         },
-                        _ => Err(ParseError::InvalidValue("Operação de divisão inválida".to_string())),
+                        _ => Err(ParseError::InvalidValue("Invalid division operation in the cosmic void".to_string())),
                     },
                     BinaryOperator::Modulo => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => {
                             if *b == 0 {
-                                Err(ParseError::InvalidValue("Módulo por zero".to_string()))
+                                Err(ParseError::InvalidValue("Attempted to modulo by the void".to_string()))
                             } else {
                                 Ok(Value::Number(a % b))
                             }
                         },
-                        _ => Err(ParseError::InvalidValue("Operação de módulo inválida".to_string())),
+                        _ => Err(ParseError::InvalidValue("Invalid modulo operation in the cosmic void".to_string())),
                     },
                 }
             },
@@ -262,19 +226,19 @@ impl Expression {
                     ComparisonOperator::NotEquals => left_val != right_val,
                     ComparisonOperator::LessThan => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => a < b,
-                        _ => return Err(ParseError::InvalidValue("Comparação < só funciona com números".to_string())),
+                        _ => return Err(ParseError::InvalidValue("Comparison < only works with numbers in the cosmic void".to_string())),
                     },
                     ComparisonOperator::GreaterThan => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => a > b,
-                        _ => return Err(ParseError::InvalidValue("Comparação > só funciona com números".to_string())),
+                        _ => return Err(ParseError::InvalidValue("Comparison > only works with numbers in the cosmic void".to_string())),
                     },
                     ComparisonOperator::LessThanOrEqual => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => a <= b,
-                        _ => return Err(ParseError::InvalidValue("Comparação <= só funciona com números".to_string())),
+                        _ => return Err(ParseError::InvalidValue("Comparison <= only works with numbers in the cosmic void".to_string())),
                     },
                     ComparisonOperator::GreaterThanOrEqual => match (&left_val, &right_val) {
                         (Value::Number(a), Value::Number(b)) => a >= b,
-                        _ => return Err(ParseError::InvalidValue("Comparação >= só funciona com números".to_string())),
+                        _ => return Err(ParseError::InvalidValue("Comparison >= only works with numbers in the cosmic void".to_string())),
                     },
                 };
                 Ok(Value::Number(if result { 1 } else { 0 }))
@@ -283,7 +247,7 @@ impl Expression {
                 let left_val = left.eval(env)?;
                 let left_bool = match &left_val {
                     Value::Number(n) => *n != 0,
-                    _ => return Err(ParseError::InvalidValue("Operações lógicas precisam de operandos numéricos".to_string())),
+                    _ => return Err(ParseError::InvalidValue("Logical operations require numeric operands in the cosmic void".to_string())),
                 };
                 
                 match op {
@@ -294,13 +258,13 @@ impl Expression {
                         }
                         
                         let right = right.as_ref().ok_or_else(|| 
-                            ParseError::InvalidValue("Operador AND requer um operando direito".to_string())
+                            ParseError::InvalidValue("AND operator requires a right operand in the ritual".to_string())
                         )?;
                         
                         let right_val = right.eval(env)?;
                         let right_bool = match &right_val {
                             Value::Number(n) => *n != 0,
-                            _ => return Err(ParseError::InvalidValue("Operações lógicas precisam de operandos numéricos".to_string())),
+                            _ => return Err(ParseError::InvalidValue("Logical operations require numeric operands in the cosmic void".to_string())),
                         };
                         
                         Ok(Value::Number(if left_bool && right_bool { 1 } else { 0 }))
@@ -311,13 +275,13 @@ impl Expression {
                         }
                         
                         let right = right.as_ref().ok_or_else(|| 
-                            ParseError::InvalidValue("Operador OR requer um operando direito".to_string())
+                            ParseError::InvalidValue("OR operator requires a right operand in the ritual".to_string())
                         )?;
                         
                         let right_val = right.eval(env)?;
                         let right_bool = match &right_val {
                             Value::Number(n) => *n != 0,
-                            _ => return Err(ParseError::InvalidValue("Operações lógicas precisam de operandos numéricos".to_string())),
+                            _ => return Err(ParseError::InvalidValue("Logical operations require numeric operands in the cosmic void".to_string())),
                         };
                         
                         Ok(Value::Number(if left_bool || right_bool { 1 } else { 0 }))
@@ -330,15 +294,15 @@ impl Expression {
                     match idx_val {
                         Value::Number(idx) => {
                             if idx < 0 || idx as usize >= arr.len() {
-                                Err(ParseError::InvalidValue(format!("Índice {} fora dos limites do array {}", idx, name)))
+                                Err(ParseError::InvalidValue(format!("Array index {} out of bounds in the matrix for array '{}'", idx, name)))
                             } else {
                                 Ok(arr[idx as usize].clone())
                             }
                         },
-                        _ => Err(ParseError::InvalidValue("Índice de array deve ser um número".to_string())),
+                        _ => Err(ParseError::InvalidValue("Array index must be a number in the cosmic void".to_string())),
                     }
                 } else {
-                    Err(ParseError::InvalidValue(format!("Array não encontrado: {}", name)))
+                    Err(ParseError::InvalidValue(format!("Array '{}' not found in the cosmic void", name)))
                 }
             },
             Expression::StructAccess { name, field } => {
@@ -346,21 +310,33 @@ impl Expression {
                     if let Some((_, value)) = fields.iter().find(|(f, _)| f == field) {
                         Ok(value.clone())
                     } else {
-                        Err(ParseError::InvalidValue(format!("Campo '{}' não encontrado na estrutura '{}'", field, name)))
+                        Err(ParseError::InvalidValue(format!("Field '{}' not found in struct '{}' in the matrix", field, name)))
                     }
                 } else {
-                    Err(ParseError::InvalidValue(format!("Estrutura não encontrada: {}", name)))
+                    Err(ParseError::InvalidValue(format!("Struct '{}' not found in the cosmic void", name)))
                 }
             },
             Expression::FunctionCall { name, args } => {
                 let function_name = name.clone();
                 Err(ParseError::InvalidValue(format!(
-                    "Chamada de função '{}' não pode ser avaliada diretamente neste contexto",
+                    "Function call '{}' cannot be evaluated directly in this context of the ritual",
                     function_name
                 )))
             },
             Expression::Equals(_, _) => {
-                Err(ParseError::InvalidValue("Equals não é uma expressão avaliável".to_string()))
+                Err(ParseError::InvalidValue("Equals is not an evaluable expression in the ritual".to_string()))
+            },
+            Expression::StructInstance { struct_name, fields } => {
+                if let Some(Value::Struct(name, existing_fields)) = env.get(struct_name) {
+                    let mut new_fields = existing_fields.clone();
+                    for (field, value) in fields {
+                        let field_value = value.eval(env)?;
+                        new_fields.push((field.clone(), field_value));
+                    }
+                    Ok(Value::Struct(name.clone(), new_fields))
+                } else {
+                    Err(ParseError::InvalidValue(format!("Struct '{}' not found in the cosmic void", struct_name)))
+                }
             },
         }
     }
@@ -372,7 +348,7 @@ impl BinaryOperator {
             BinaryOperator::Add => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
                 (Value::Text(a), Value::Text(b)) => Ok(Value::Text(a.clone() + b)),
-                _ => Err(ParseError::InvalidValue("Invalid types for Add".to_string())),
+                _ => Err(ParseError::InvalidValue("Invalid types for Add in the cosmic void".to_string())),
             },
             _ => unimplemented!(),
         }
@@ -445,6 +421,10 @@ pub enum Expression {
         name: String,
         field: String,
     },
+    StructInstance {
+        struct_name: String,
+        fields: Vec<(String, Expression)>,
+    },
     FunctionCall {
         name: String,
         args: Vec<Expression>,
@@ -475,55 +455,4 @@ pub enum LogicalOperator {
     And,
     Or,
     Not,
-}
-
-#[derive(Debug, Clone)]
-pub enum FishOperation {
-    Add,
-    Remove,
-    Find,
-    Sort,
-}
-
-#[derive(Debug, Clone)]
-pub enum BubbleFormat {
-    Normal,
-    Uppercase,
-    Lowercase,
-    Reversed,
-}
-
-#[derive(Debug, Clone)]
-pub enum TideOperation {
-    Copy,
-    Move,
-    Transform,
-}
-
-#[derive(Debug, Clone)]
-pub enum ProtectionLevel {
-    Public,
-    Protected,
-    Private,
-}
-
-#[derive(Debug, Clone)]
-pub enum WaveOperation {
-    Concat,
-    Split,
-    Join,
-}
-
-#[derive(Debug, Clone)]
-pub enum SplashOperation {
-    Read,
-    Write,
-    Append,
-}
-
-#[derive(Debug, Clone)]
-pub enum CurrentOperation {
-    Map,
-    Filter,
-    Reduce,
 }

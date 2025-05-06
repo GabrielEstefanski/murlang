@@ -53,12 +53,12 @@ fn parse_comparison(tokens: &[Token], i: &mut usize) -> Result<Expression, Parse
 
     while *i < tokens.len() {
         let op = match &tokens[*i] {
-            Token::EqualsEquals => ComparisonOperator::Equals,
-            Token::NotEquals => ComparisonOperator::NotEquals,
+            Token::Equal => ComparisonOperator::Equals,
+            Token::NotEqual => ComparisonOperator::NotEquals,
             Token::LessThan => ComparisonOperator::LessThan,
             Token::GreaterThan => ComparisonOperator::GreaterThan,
-            Token::LessThanOrEqual => ComparisonOperator::LessThanOrEqual,
-            Token::GreaterThanOrEqual => ComparisonOperator::GreaterThanOrEqual,
+            Token::LessEqual => ComparisonOperator::LessThanOrEqual,
+            Token::GreaterEqual => ComparisonOperator::GreaterThanOrEqual,
             _ => break,
         };
         *i += 1;
@@ -142,7 +142,7 @@ fn parse_unary(tokens: &[Token], i: &mut usize) -> Result<Expression, ParseError
 
 fn parse_primary(tokens: &[Token], i: &mut usize) -> Result<Expression, ParseError> {
     if *i >= tokens.len() {
-        return Err(ParseError::UnexpectedToken("Fim inesperado dos tokens".to_string()));
+        return Err(ParseError::UnexpectedToken(format!("Unexpected end of tokens in the cosmic void at position {}", i)))
     }
 
     match &tokens[*i] {
@@ -155,61 +155,202 @@ fn parse_primary(tokens: &[Token], i: &mut usize) -> Result<Expression, ParseErr
             } else if let Ok(num) = n.parse::<num_bigint::BigInt>() {
                 Ok(Expression::Literal(Value::NumberBig(num)))
             } else {
-                Err(ParseError::InvalidValue(format!("Número inválido: {}", n)))
+                Err(ParseError::InvalidValue(format!("Invalid number in the cosmic void: {} at position {}", n, i)))
             }
         },
         Token::StringLiteral(s) => {
             *i += 1;
             Ok(Expression::Literal(Value::Text(s.clone())))
         },
+        Token::Keyword(kw) => {
+            *i += 1;
+            match kw.as_str() {
+                "call" => {
+                    if *i >= tokens.len() {
+                        return Err(ParseError::UnexpectedToken(format!("Unexpected end after 'grrrblbl' in the ritual at position {}", i)))
+                    }
+                    
+                    let func_name = match &tokens[*i] {
+                        Token::Identifier(name) => name.clone(),
+                        tok => return Err(ParseError::UnexpectedToken(format!("Expected identifier after 'grrrblbl', found {:?} in the ritual at position {}", tok, i))),
+                    };
+                    *i += 1;
+                    
+                    let mut args = Vec::new();
+                    
+                    let has_parens = *i < tokens.len() && matches!(&tokens[*i], Token::LeftParen);
+                    if has_parens {
+                        *i += 1;
+                    }
+                    
+                    while *i < tokens.len() {
+                        if has_parens && matches!(&tokens[*i], Token::RightParen) {
+                            *i += 1;
+                            break;
+                        }
+                        
+                        if !has_parens && (*i >= tokens.len() || matches!(&tokens[*i], Token::Keyword(_))) {
+                            break;
+                        }
+                        
+                        match &tokens[*i] {
+                            Token::Identifier(var_name) => {
+                                args.push(Expression::Variable(var_name.clone()));
+                                *i += 1;
+                            },
+                            Token::Number(num) => {
+                                if let Ok(n) = num.parse::<i32>() {
+                                    args.push(Expression::Literal(Value::Number(n)));
+                                } else if let Ok(n) = num.parse::<i64>() {
+                                    args.push(Expression::Literal(Value::NumberI64(n)));
+                                } else if let Ok(n) = num.parse::<num_bigint::BigInt>() {
+                                    args.push(Expression::Literal(Value::NumberBig(n)));
+                                } else {
+                                    return Err(ParseError::InvalidValue(format!("Invalid number in the cosmic void: {} at position {}", num, i)));
+                                }
+                                *i += 1;
+                            },
+                            Token::StringLiteral(text) => {
+                                args.push(Expression::Literal(Value::Text(text.clone())));
+                                *i += 1;
+                            },
+                            Token::Comma => {
+                                *i += 1;
+                            },
+                            _ => break,
+                        }
+                    }
+                    
+                    Ok(Expression::FunctionCall { name: func_name, args })
+                },
+                "math" => {
+                    let func_name = kw.clone();
+                    let mut args = Vec::new();
+                    let start_pos = *i;
+                    
+                    if *i < tokens.len() && matches!(&tokens[*i], Token::LeftParen) {
+                        *i += 1;
+                        
+                        while *i < tokens.len() {
+                            if matches!(&tokens[*i], Token::RightParen) {
+                                *i += 1;
+                                break;
+                            }
+                            
+                            match &tokens[*i] {
+                                Token::Identifier(var_name) => {
+                                    args.push(Expression::Variable(var_name.clone()));
+                                    *i += 1;
+                                },
+                                Token::Number(num) => {
+                                    if let Ok(n) = num.parse::<i32>() {
+                                        args.push(Expression::Literal(Value::Number(n)));
+                                    } else if let Ok(n) = num.parse::<i64>() {
+                                        args.push(Expression::Literal(Value::NumberI64(n)));
+                                    } else if let Ok(n) = num.parse::<num_bigint::BigInt>() {
+                                        args.push(Expression::Literal(Value::NumberBig(n)));
+                                    } else {
+                                        return Err(ParseError::InvalidValue(format!("Invalid number in the cosmic void: {} at position {}", num, i)));
+                                    }
+                                    *i += 1;
+                                },
+                                Token::StringLiteral(text) => {
+                                    args.push(Expression::Literal(Value::Text(text.clone())));
+                                    *i += 1;
+                                },
+                                Token::Comma => {
+                                    *i += 1;
+                                },
+                                _ => break,
+                            }
+                        }
+                    }
+                    
+                    if *i >= tokens.len() || !matches!(&tokens[*i-1], Token::RightParen) {
+                        return Err(ParseError::MissingToken(format!("Missing ')' to close {} function call at position {}", func_name, start_pos)));
+                    }
+                    
+                    Ok(Expression::FunctionCall { name: func_name, args })
+                },
+                _ => Err(ParseError::UnexpectedToken(format!("Unexpected keyword in the cosmic void: {} at position {}", kw, i))),
+            }
+        },
         Token::Identifier(name) => {
             *i += 1;
-            if *i < tokens.len() {
-                match &tokens[*i] {
-                    Token::LeftBracket => {
+            if *i < tokens.len() && matches!(&tokens[*i], Token::LeftBrace) {
+                *i += 1;
+                let mut fields = Vec::new();
+                
+                while *i < tokens.len() {
+                    if matches!(&tokens[*i], Token::RightBrace) {
                         *i += 1;
-                        let index = parse_expression(tokens, i)?;
-                        if *i < tokens.len() && matches!(&tokens[*i], Token::RightBracket) {
-                            *i += 1;
-                            Ok(Expression::ArrayAccess {
-                                name: name.clone(),
-                                index: Box::new(index),
-                            })
-                        } else {
-                            Err(ParseError::MissingToken("Faltando ']' para fechar o acesso ao array".to_string()))
-                        }
-                    },
-                    Token::Dot => {
+                        break;
+                    }
+                    
+                    let field_name = match &tokens[*i] {
+                        Token::Identifier(name) => name.clone(),
+                        _ => return Err(ParseError::UnexpectedToken(format!("Expected field name, found {:?} in the matrix at position {}", tokens[*i], i))),
+                    };
+                    *i += 1;
+                    
+                    expect_token_type(tokens, i, "Colon")?;
+                    
+                    let field_value = parse_expression(tokens, i)?;
+                    fields.push((field_name, field_value));
+                    
+                    if matches!(&tokens[*i], Token::Comma) {
                         *i += 1;
-                        if *i >= tokens.len() {
-                            return Err(ParseError::MissingToken("Faltando nome do campo após '.'".to_string()));
-                        }
-                        if let Token::Identifier(field) = &tokens[*i] {
-                            *i += 1;
-                            Ok(Expression::StructAccess {
-                                name: name.clone(),
-                                field: field.clone(),
-                            })
-                        } else {
-                            Err(ParseError::InvalidValue(format!("Esperado identificador após '.', encontrado {:?}", tokens[*i])))
-                        }
-                    },
-                    _ => Ok(Expression::Variable(name.clone())),
+                    } else if !matches!(&tokens[*i], Token::RightBrace) {
+                        return Err(ParseError::UnexpectedToken(format!("Expected ',' or '}}', found {:?} in the matrix at position {}", tokens[*i], i)));
+                    }
                 }
+                
+                Ok(Expression::StructInstance {
+                    struct_name: name.clone(),
+                    fields,
+                })
             } else {
                 Ok(Expression::Variable(name.clone()))
             }
         },
         Token::LeftParen => {
+            let start_pos = *i;
             *i += 1;
             let expr = parse_expression(tokens, i)?;
             if *i < tokens.len() && matches!(&tokens[*i], Token::RightParen) {
                 *i += 1;
                 Ok(expr)
             } else {
-                Err(ParseError::MissingToken("Faltando ')' para fechar a expressão".to_string()))
+                Err(ParseError::MissingToken(format!("Missing ')' to close expression in the ritual at position {}", start_pos)))
             }
         },
-        _ => Err(ParseError::InvalidValue(format!("Token inesperado: {:?}", tokens[*i]))),
+        _ => Err(ParseError::InvalidValue(format!("Unexpected token in the cosmic void: {:?} at position {}", tokens[*i], i))),
+    }
+}
+
+fn expect_token_type(tokens: &[Token], i: &mut usize, expected_type: &str) -> Result<(), ParseError> {
+    if *i >= tokens.len() {
+        return Err(ParseError::UnexpectedToken(format!("Unexpected end, expected {} in the ritual at position {}", expected_type, i)))
+    }
+
+    let matches = match (&tokens[*i], expected_type) {
+        (Token::LeftParen, "LeftParen") => true,
+        (Token::RightParen, "RightParen") => true,
+        (Token::LeftBracket, "LeftBracket") => true,
+        (Token::RightBracket, "RightBracket") => true,
+        (Token::LeftBrace, "LeftBrace") => true,
+        (Token::RightBrace, "RightBrace") => true,
+        (Token::Semicolon, "Semicolon") => true,
+        (Token::Colon, "Colon") => true,
+        (Token::Comma, "Comma") => true,
+        (Token::Assign, "Equals") => true,
+        _ => false,
+    };
+
+    if matches {
+        *i += 1;
+        Ok(())
+    } else {
+        Err(ParseError::UnexpectedToken(format!("Expected {}, found {:?} in the ritual at position {}", expected_type, tokens[*i], i)))
     }
 } 

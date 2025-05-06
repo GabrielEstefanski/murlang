@@ -1,191 +1,82 @@
-use mur_lang::*;
-use mur_lang::lexer::tokenize;
+use mur_lang::lexer::{tokenize, Token as LexerToken};
 use mur_lang::parser::parse;
 use mur_lang::interpreter::MurlocRuntime;
 use mur_lang::value_parser::ParseError;
+use std::time::Instant;
+use std::env;
+use std::fs;
+use env_logger::Env;
+
+enum LogLevel {
+    Info,
+    Error,
+    Debug,
+}
+
+fn log(level: LogLevel, message: &str) {
+    let prefix = match level {
+        LogLevel::Info => "[INFO]",
+        LogLevel::Error => "[ERROR]",
+        LogLevel::Debug => "[DEBUG]",
+    };
+    println!("{} {}", prefix, message);
+}
 
 fn main() -> Result<(), ParseError> {
-    let source = r#"
-        // Função para calcular Fibonacci
-        grrrfnrrg fibonacci_rec (n)
-        mrgl
-            mrglif (n < 0)
-            mrgl
-                grrr retorno = 0
-                grrrtn retorno
-            grl
-            
-            mrglif (n == 0)
-            mrgl
-                grrr retorno = 0
-                grrrtn retorno
-            grl
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
-            mrglif n == 1
-            mrgl
-                grrr retorno = 1
-                grrrtn retorno
-            grl
+    let args: Vec<String> = env::args().collect();
+    let verbose = args.contains(&"--verbose".to_string()) || args.contains(&"-v".to_string());
 
-            grrprint "Calculando fibonacci_rec(" + n + ")"
-            grrr n1 = n - 1
-            grrrblbl fibonacci_rec n1
+    let file_path = args.iter().find(|s| s.ends_with(".mur"));
+    let source = match file_path {
+        Some(path) => match fs::read_to_string(path) {
+            Ok(content) => {
+                log(LogLevel::Info, &format!("Mrglglglgl! Executing file: {}", path));
+                content
+            },
+            Err(err) => {
+                log(LogLevel::Error, &format!("Failed to read file: {}", err));
+                return Err(ParseError::InvalidValue(format!("File read error: {}", err)));
+            }
+        },
+        None => {
+            log(LogLevel::Info, "Mrglglglgl! No file provided, nothing to execute.");
+            return Ok(());
+        }
+    };
 
-            grrr fib_n1 = retorno
+    let total_start = Instant::now();
 
-            grrr n2 = n - 2
-            grrrblbl fibonacci_rec n2
+    let start = Instant::now();
+    log(LogLevel::Info, "Mrglglgl! Tokenizing code...");
+    let spanned_tokens = tokenize(&source)
+        .map_err(|e| ParseError::InvalidValue(format!(
+            "Lexer error at line {}, column {}: {}", e.line, e.column, e.message)))?;
+    log(LogLevel::Info, &format!("Tokenizing completed in {:.2?}", start.elapsed()));
 
-            grrr fib_n2 = retorno
-
-            grrr resultado = fib_n1 + fib_n2
-            grrprint "fibonacci_rec(" + n + ") = " + resultado
-
-            grrr retorno = resultado
-            grrrtn retorno
-        grl
-
-        // Função para calcular Fibonacci em paralelo com threads
-        grrrfnrrg fibonacci_paralelo (n)
-        mrgl
-            mrglif (n <= 1)
-            mrgl
-                grrr retorno = n
-                grrrtn retorno
-            grl
-
-            // Spawn de thread para calcular fib(n-1)
-            mrglspawn thread_fib_n1
-            mrgl
-                grrprint "Thread calculando fib(" + (n-1) + ")"
-                grrrblbl fibonacci_rec (n-1)
-                grrprint "Thread concluiu fib(" + (n-1) + ") = " + retorno
-            grl
-
-            // Calcular fib(n-2) na thread principal
-            grrprint "Thread principal calculando fib(" + (n-2) + ")"
-            grrrblbl fibonacci_rec (n-2)
-            grrr fib_n2 = retorno
-
-            // Aguardar a conclusão da thread
-            mrglwait thread_fib_n1
-
-            // Somar os resultados
-            grrr fib_n1 = retorno
-            grrr resultado = fib_n1 + fib_n2
-            grrprint "fibonacci_paralelo(" + n + ") = " + resultado
-            
-            grrr retorno = resultado
-            grrrtn retorno
-        grl
-
-        // Função para calcular Fibonacci usando um pool de threads
-        grrrfnrrg fibonacci_pool (n)
-        mrgl
-            mrglif (n < 10)
-            mrgl
-                grrrblbl fibonacci_rec n
-                grrrtn retorno
-            grl
-
-            grrprint "Usando pool de threads para calcular Fibonacci de " + n
-            
-            // Criar um pool com 4 threads
-            fshpoolsize 4
-            fshpool
-            mrgl
-                // Tarefa 1: Calcular fib(n-1)
-                mrglspawn task1
-                mrgl
-                    grrprint "Tarefa 1 calculando fib(" + (n-1) + ")"
-                    grrrblbl fibonacci_rec (n-1)
-                    grrprint "Tarefa 1 obteve: " + retorno
-                grl
-
-                // Tarefa 2: Calcular fib(n-2)
-                mrglspawn task2
-                mrgl
-                    grrprint "Tarefa 2 calculando fib(" + (n-2) + ")"
-                    grrrblbl fibonacci_rec (n-2)
-                    grrprint "Tarefa 2 obteve: " + retorno
-                grl
-            grl
-
-            // Aguardar conclusão das tarefas
-            mrglwait task1
-            grrr fib_n1 = retorno
-            
-            mrglwait task2
-            grrr fib_n2 = retorno
-
-            grrr resultado = fib_n1 + fib_n2
-            grrprint "fibonacci_pool(" + n + ") = " + resultado
-            
-            grrr retorno = resultado
-            grrrtn retorno
-        grl
-
-        // Função assíncrona para demonstrar async/await
-        mrglasync grrrfnrrg fibonacci_async (n)
-        mrgl
-            mrglif (n <= 1)
-            mrgl
-                grrr retorno = n
-                grrrtn retorno
-            grl
-
-            // Criar future para fib(n-1)
-            grrr future_n1 = mrglasync grrrblbl fibonacci_async (n-1)
-            
-            // Calcular fib(n-2) enquanto isso
-            grrrblbl fibonacci_async (n-2)
-            grrr fib_n2 = retorno
-            
-            // Aguardar completude do future
-            mrglawait future_n1
-            grrr fib_n1 = retorno
-            
-            grrr resultado = fib_n1 + fib_n2
-            grrprint "fibonacci_async(" + n + ") = " + resultado
-            
-            grrr retorno = resultado
-            grrrtn retorno
-        grl
-
-        // Programa principal
-        grrprint "Calculando Fibonacci de 10 sequencialmente:"
-        grrrblbl fibonacci_rec 10
-        grrprint "Resultado sequencial: " + retorno
-
-        grrprint "Calculando Fibonacci de 10 em paralelo:"
-        grrrblbl fibonacci_paralelo 10
-        grrprint "Resultado paralelo: " + retorno
-
-        grrprint "Calculando Fibonacci de 20 com pool de threads:"
-        grrrblbl fibonacci_pool 20
-        grrprint "Resultado com pool: " + retorno
-
-        grrprint "Calculando Fibonacci de 15 de forma assíncrona:"
-        grrrblbl fibonacci_async 15
-        grrprint "Resultado assíncrono: " + retorno
-    "#;
-
-    println!("Mrglglgl! Tokenizando código...");
-    let spanned_tokens = tokenize(source);
-    println!("Mrgl! Tokens gerados:");
-    for (i, token) in spanned_tokens.iter().enumerate() {
-        println!("{}: {:?} (linha {}, coluna {})", i, token.token, token.line, token.column);
+    if verbose {
+        log(LogLevel::Debug, "First tokens:");
+        for (i, token) in spanned_tokens.iter().take(10).enumerate() {
+            log(LogLevel::Debug, &format!(
+                "{}: {:?} (line {}, column {})",
+                i, token.token, token.line, token.column
+            ));
+        }
     }
 
-    println!("\nAaaaaughibbrgubugbugrguburgle! Parsing código...");
-    let tokens: Vec<lexer::Token> = spanned_tokens.iter().map(|t| t.token.clone()).collect();
+    let start = Instant::now();
+    log(LogLevel::Info, "Aaaaaughibbrgubugbugrguburgle! Parsing code...");
+    let tokens: Vec<LexerToken> = spanned_tokens.iter().map(|t| t.token.clone()).collect();
     let statements = parse(tokens)?;
-    println!("Rwlrwl! Statements gerados: {:?}", statements);
+    log(LogLevel::Info, &format!("Parsing completed in {:.2?}", start.elapsed()));
 
-    println!("\nMrglglgl! Executando código...");
+    let start = Instant::now();
+    log(LogLevel::Info, "Mrglglgl! Executing code...");
     let runtime = MurlocRuntime::new();
     runtime.run(statements)?;
-    println!("\nMrglglgl! Execução concluída com sucesso!");
-    
+    log(LogLevel::Info, &format!("Execution completed in {:.2?}", start.elapsed()));
+
+    log(LogLevel::Info, &format!("Total runtime: {:.2?}", total_start.elapsed()));
     Ok(())
 }

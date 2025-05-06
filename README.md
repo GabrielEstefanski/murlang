@@ -1,215 +1,193 @@
-# Murlang: A Linguagem de Programação para Murlocs
+# Murlang - The Murloc Programming Language
 
-![Murloc Programador](https://media.tenor.com/g1cpnwn7ll0AAAAC/murloc-world-of-warcraft.gif)
+**MRGLGLGLGL!** Welcome to Murlang, the programming language inspired by the Murlocs from the Warcraft universe!
 
-> MRRGLRLRLRMGRRR!! *Tradução: Bem-vindo(a) à documentação oficial da Murlang!*
+## About
 
-## Introdução
+Murlang is an interpreted programming language with syntax based on "Murloc-speak". It incorporates modern programming concepts while maintaining the unique charm of Murloc communication:
 
-**Murlang** é a primeira linguagem de programação desenvolvida por murlocs, para murlocs... e humanos corajosos dispostos a aprender sua sabedoria ancestral. Projetada nas profundezas aquáticas da Costa de Azeroth, esta linguagem combina a elegância vocal dos murlocs com o poder da concorrência moderna e programação assíncrona.
+- Asynchronous Programming (`mrglasync`, `mrglawait`)
+- Parallel Programming with Threads (`splurg`, `mrglwait`)
+- Higher-Order Functions
+- Complex Data Structures
+- Type System
+- Error Handling with Murloc-themed messages
 
-*Aviso: Programar em Murlang com volume alto pode atrair murlocs para sua residência. Não nos responsabilizamos por invasões anfíbias.*
+## Quick Start
 
-## Características
+```rust
+// Variable declaration
+grrr name = "Mrglglgl"
+grrr age = 42
 
-- 🐟 **Gramática Murloc-friendly**: Palavras-chave intuitivas para quem fala "mrgl mrgl"
-- 🌊 **Multi-threading nativo**: Como um bando de murlocs atacando de múltiplas direções
-- 🐙 **Processamento assíncrono**: Para quando você precisar pescar e programar ao mesmo tempo
-- 🐸 **Tipagem dinâmica**: Flexível como um murloc nadando entre os recifes
-
-## Sintaxe Básica
-
-### Declaração de Variáveis
-
-```
-grrr nome_variavel = valor
-```
-
-*Este é o som que um murloc faz quando descobre um tesouro... ou uma variável.*
-
-### Estruturas de Controle
-
-#### If-Else
-```
-mrglif (condicao)
+// Function definition
+grrrfnrrg greet(name)
 mrgl
-    // código se verdadeiro
+    glglrr "Hello, " + name + "!"
 grl
 
-mrglelse
+// Struct definition
+rrkgr Murloc
 mrgl
-    // código se falso
-grl
-```
-
-#### Loops
-```
-mrrg variavel = 0; variavel < 10; variavel = variavel + 1
-mrgl
-    // código do loop
-grl
-```
-
-### Funções
-
-```
-grrrfnrrg nome_funcao (parametro1, parametro2)
-mrgl
-    // corpo da função
-    grrr retorno = resultado
-    grrrtn retorno
-grl
-```
-
-*Nota: Quando um murloc define uma função, ele geralmente dança em círculos.*
-
-## Recursos Avançados
-
-### Multi-threading
-
-```
-mrglspawn thread_pescador
-mrgl
-    grrprint "Pescando comida enquanto programo!"
+    nome: blbtxt,    // text type
+    nivel: numblrr,  // number type
+    vida: numblrr,   // number type
 grl
 
-// código principal continua executando...
-
-mrglwait thread_pescador
-```
-
-### Async/Await
-
-```
-mrglasync grrrfnrrg buscar_tesouros (local)
+// Control structures
+grlbrr (age > 30)    // if
 mrgl
-    // busca assincrona
-    grrrtn tesouro
+    glglrr name + " is a wise murloc!"
+grl
+blrrgl              // else
+mrgl
+    glglrr name + " is a young murloc!"
 grl
 
-// Em outro lugar:
-grrr future_tesouro = mrglasync grrrblbl buscar_tesouros "costa"
-mrglawait future_tesouro
-```
-
-### Pool de Threads
-
-```
-fshpoolsize 4
-fshpool
+// Loops
+gglrbl (age > 40)    // while
 mrgl
-    mrglspawn tarefa1
-    mrgl
-        // Tarefa 1
-    grl
-    
-    mrglspawn tarefa2
-    mrgl
-        // Tarefa 2
-    grl
-grl
-```
-
-## Exemplo Completo: Fibonacci à moda Murloc
-
-```
-grrrfnrrg fibonacci_rec (n)
-mrgl
-    mrglif (n <= 1)
-    mrgl
-        grrr retorno = n
-        grrrtn retorno
-    grl
-
-    grrprint "Mrglglgl calculando Fibonacci(" + n + ")"
-    
-    grrr n1 = n - 1
-    grrrblbl fibonacci_rec n1
-    grrr fib_n1 = retorno
-
-    grrr n2 = n - 2
-    grrrblbl fibonacci_rec n2
-    grrr fib_n2 = retorno
-
-    grrr resultado = fib_n1 + fib_n2
-    grrrtn resultado
+    glglrr "Countdown: " + age
+    age = age - 1
 grl
 
-grrprint "MRGLMRGLMRGL! Fibonacci de 10:"
-grrrblbl fibonacci_rec 10
-grrprint "Resultado: " + retorno
+// Function call
+grrrblbl greet(name)
+
+// Struct instance
+grrr murloc_chief = Murloc { nome: "Grrmrgl", nivel: 10, vida: 100 }
 ```
 
-## Exemplo com Threads: Pesca Paralela
+## Language Features
 
+### Keywords
+
+| Murloc-Speak | Meaning | Example |
+|--------------|---------|---------|
+| `grrr` | Variable declaration | `grrr x = 10` |
+| `grlbrr` | If statement | `grlbrr (x > 0)` |
+| `grrrfnrrg` | Function definition | `grrrfnrrg sum(a, b)` |
+| `grrrblbl` | Function call | `grrrblbl sum(5, 3)` |
+| `mrgl` | Block start | `mrgl` |
+| `grl` | Block end | `grl` |
+| `glglrr` | Print | `glglrr "Hello"` |
+| `grrrtn` | Return | `grrrtn result` |
+| `splurg` | Spawn thread | `splurg { ... }` |
+| `mrglwait` | Wait for thread | `mrglwait [thread1, thread2]` |
+| `mrglasync` | Async function | `mrglasync fn task()` |
+| `mrglawait` | Await operation | `mrglawait future` |
+
+### Data Types
+
+- Numbers (`numblrr`)
+- Text (`blbtxt`)
+- Arrays (`grrip`)
+- Structs (`rrkgr`)
+- Threads
+- Futures
+
+### Control Structures
+
+- If/Else (`grlbrr`/`blrrgl`)
+- While loops (`gglrbl`)
+- For loops (`mrrg`)
+- Switch statements (`murrrgh`)
+- Try/Catch (`mrglswim`/`mrglcatch`)
+
+## Installation
+
+### Windows
+
+```batch
+cd scripts
+install.bat
 ```
-grrrfnrrg pescar_paralelo (num_peixes)
-mrgl
-    mrglif (num_peixes <= 1)
-    mrgl
-        grrr retorno = num_peixes
-        grrrtn retorno
-    grl
 
-    mrglspawn thread_pescador1
-    mrgl
-        grrprint "Murloc 1 pescando " + (num_peixes/2) + " peixes"
-        grrrblbl pescar_paralelo (num_peixes/2)
-    grl
+Add the bin directory to your PATH or run `bin\activate.bat` to set up the environment.
 
-    mrglspawn thread_pescador2
-    mrgl
-        grrprint "Murloc 2 pescando " + (num_peixes/2) + " peixes"
-        grrrblbl pescar_paralelo (num_peixes/2)
-    grl
-
-    mrglwait thread_pescador1
-    grrr peixes1 = retorno
-    
-    mrglwait thread_pescador2
-    grrr peixes2 = retorno
-    
-    grrr total = peixes1 + peixes2
-    grrprint "Total de peixes: " + total
-    grrrtn total
-grl
-```
-
-## Instalação
-
-1. Certifique-se de estar próximo a um corpo de água (rios, lagos ou oceanos)
-2. Realize o ritual de invocação murloc: "Mrglglglglgl!"
-3. Execute:
-   ```
-   cargo install murlang
-   ```
-4. Opcional: Ofereça um peixe cru como agradecimento
-
-## Executando programas
+### Linux/macOS
 
 ```bash
-murlang meu_programa.mrgl
+cd scripts
+chmod +x install.sh
+./install.sh
 ```
 
-## Depuração
+Add the bin directory to your PATH or run `source bin/activate` to set up the environment.
 
-A depuração em Murlang envolve gritar "MRGLGLGLGL!" repetidamente até o programa funcionar. Os murlocs chamam isso de "Debugging orientado a grito".
+## Usage
 
-## Contribuição
+After installation, you can run Murlang programs using:
 
-Contribuições são bem-vindas! Para contribuir:
+```bash
+mrgl run my_program.mur
+```
 
-1. Faça um fork do repositório
-2. Crie uma branch: `git checkout -b minha-feature-mrgl`
-3. Faça suas alterações
-4. Commit com mensagens em linguagem murloc: `git commit -m "MRGLGLGL!"`
-5. Push: `git push origin minha-feature-mrgl`
-6. Abra um Pull Request
+### Additional Commands
 
-## Licença
+```bash
+mrgl version   # Show Murlang version
+mrgl help      # Show available commands
+```
 
-Murlang é distribuída sob a licença **Mrgl Public License (MPL)**, que basicamente diz que você pode usar a linguagem desde que compartilhe seu peixe.
+## Building from Source
 
----
+Murlang is built with Rust. To compile:
 
-*"Aaaaughibbrgubugbugrguburgle!" - Criador da Murlang, ao compilar com sucesso pela primeira vez* 
+```bash
+cargo build --release
+```
+
+The executable will be generated in `target/release/mur_lang`.
+
+## Project Structure
+
+```
+mur_lang/
+├── src/
+│   ├── lexer.rs      # Tokenization
+│   ├── parser.rs     # Syntax analysis
+│   ├── ast.rs        # Abstract Syntax Tree
+│   ├── interpreter/  # Runtime and execution
+│   └── main.rs       # Entry point
+├── scripts/          # Installation scripts
+├── examples/         # Example programs
+└── tests/           # Test suite
+```
+
+## Contributing
+
+MRGLGLGLGL! We welcome contributions! Here's how you can help:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Setup
+
+1. Install Rust and Cargo
+2. Clone the repository
+3. Run tests: `cargo test`
+4. Build: `cargo build`
+
+### Code Style
+
+- Follow Rust's standard formatting: `cargo fmt`
+- Run clippy: `cargo clippy`
+- Maintain the Murloc theme in error messages and documentation
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by the Murlocs from World of Warcraft
+- Built with Rust's amazing ecosystem
+- Thanks to all contributors who make Murlang more Murloc-like!
+
+## MRGLGLGLGL!
+
+Join us in making Murlang the most Murloc-friendly programming language ever! Aaaaaughibbrgubugbugrguburgle! 
