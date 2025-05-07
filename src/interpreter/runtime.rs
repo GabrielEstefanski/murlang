@@ -69,23 +69,9 @@ impl MurlocRuntime {
                 Ok::<(), ParseError>(())
             },
             Statement::Spawn { body, thread_name } => {
-                let vars_copy = {
-                    let vars = self.env.variables.lock()
-                        .map_err(|e| RuntimeError::LockError(format!("Failed to lock variables: {}", e)))?;
-                    vars.clone()
-                };
-                
-                let funcs_copy = {
-                    let funcs = self.env.functions.lock()
-                        .map_err(|e| RuntimeError::LockError(format!("Failed to lock functions: {}", e)))?;
-                    funcs.clone()
-                };
-                
-                let structs_copy = {
-                    let structs = self.env.structs.lock()
-                        .map_err(|e| RuntimeError::LockError(format!("Failed to lock structs: {}", e)))?;
-                    structs.clone()
-                };
+                let vars_shared = self.env.variables.clone();
+                let funcs_shared = self.env.functions.clone();
+                let structs_shared = self.env.structs.clone();
                 
                 let runtime_clone = self.runtime.clone();
                 let body_clone = body.clone();
@@ -95,9 +81,9 @@ impl MurlocRuntime {
                     let runtime_for_block_on = runtime_clone.clone();
                     let thread_runtime = MurlocRuntime {
                         env: Environment {
-                            variables: Arc::new(Mutex::new(vars_copy)),
-                            functions: Arc::new(Mutex::new(funcs_copy)),
-                            structs: Arc::new(Mutex::new(structs_copy)),
+                            variables: vars_shared,
+                            functions: funcs_shared,
+                            structs: structs_shared,
                         },
                         async_manager: AsyncManager::new(),
                         recursion_depth: recursion_depth_clone,
@@ -332,7 +318,7 @@ impl MurlocRuntime {
                 Ok(())
             },
             Statement::CallFunction { name, args } => {
-                println!("[INFO] Calling function '{}'...", name);
+                println!("[INFO] Callingdasdasdsa function '{}'...", name);
                 
                 let (params, body) = self.env.get_function(name)?;
 
@@ -435,6 +421,20 @@ impl MurlocRuntime {
                 }
                 Ok(())
             },
+            Statement::ForInLoop { iterator_var, array_name, body } => {
+                let array = self.env.get_var(array_name)?;
+                
+                match array {
+                    Value::Array(elements) => {
+                        for element in elements {
+                            self.env.set_var(iterator_var.clone(), element.clone());
+                            self.exec_block_impl(body).await?;
+                        }
+                        Ok(())
+                    },
+                    _ => Err(RuntimeError::TypeError(format!("Cannot iterate over non-array value: {}", array_name)).into()),
+                }
+            },
             Statement::LoopBlock { body } => {
                 self.exec_block_impl(body).await?;
                 Ok(())
@@ -484,115 +484,89 @@ impl MurlocRuntime {
     }
 
     pub fn call_function_expr(&self, name: &str, args: Vec<Value>) -> RuntimeResult<Value> {
-        {
-            let mut depth = self.recursion_depth.lock()
-                .map_err(|e| RuntimeError::LockError(format!("Failed to lock recursion depth: {}", e)))?;
-            *depth += 1;
-            
-            if name.contains("async") && *depth % 5 == 0 {
-                info!("Recursion depth for '{}': {}/{}", name, *depth, self.max_recursion_depth);
-            }
-            
-            if *depth > self.max_recursion_depth {
-                *depth -= 1;
-                return Err(RuntimeError::InvalidOperation(
-                    format!("Stack overflow: Maximum recursion depth ({}) reached in function '{}'", 
-                            self.max_recursion_depth, name)
-                ).into());
-            }
-        }
-        
-        let (param_names, body) = self.env.get_function(name)?;
+        println!("[DEBUG] Iniciando call_function_expr para '{}'", name);
+        match self.env.execute_sync_function(name, args.clone()) {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                println!("[DEBUG] Erro ao executar função assíncrona: {:?}", e);
+                let (param_names, body) = self.env.get_function(name)?;
 
-        let mut call_vars = self.env.variables.lock()
-            .map_err(|e| RuntimeError::LockError(format!("Failed to lock variables: {}", e)))?
-            .clone();
+                let mut call_vars = self.env.variables.lock()
+                    .map_err(|e| RuntimeError::LockError(format!("Failed to lock variables: {}", e)))?
+                    .clone();
 
-        if args.len() != param_names.len() {
-            warn!("Number of arguments ({}) different from number of parameters ({}) for function '{}'", 
-                    args.len(), param_names.len(), name);
+                if args.len() != param_names.len() {
+                    warn!("Number of arguments ({}) different from number of parameters ({}) for function '{}'", 
+                            args.len(), param_names.len(), name);
 
-            let args_to_use = if args.len() > param_names.len() {
-                args[0..param_names.len()].to_vec()
-            } else {
-                args.clone()
-            };
-            
-            for (i, param) in param_names.iter().enumerate() {
-                if i < args_to_use.len() {
-                    call_vars.insert(param.clone(), args_to_use[i].clone());
+                    let args_to_use = if args.len() > param_names.len() {
+                        args[0..param_names.len()].to_vec()
+                    } else {
+                        args.clone()
+                    };
+                    
+                    for (i, param) in param_names.iter().enumerate() {
+                        if i < args_to_use.len() {
+                            call_vars.insert(param.clone(), args_to_use[i].clone());
+                        } else {
+                            call_vars.insert(param.clone(), Value::Number(0));
+                        }
+                    }
                 } else {
-                    call_vars.insert(param.clone(), Value::Number(0));
+                    for (param, arg) in param_names.iter().zip(args.iter()) {
+                        call_vars.insert(param.clone(), arg.clone());
+                    }
+                }
+                
+                let function_env = Environment {
+                    variables: Arc::new(Mutex::new(call_vars)),
+                    functions: self.env.functions.clone(),
+                    structs: self.env.structs.clone(),
+                };
+                
+                let vars_arc = function_env.variables.clone();
+                
+                let function_runtime = MurlocRuntime {
+                    env: function_env,
+                    async_manager: AsyncManager::new(),
+                    recursion_depth: self.recursion_depth.clone(),
+                    max_recursion_depth: self.max_recursion_depth,
+                    runtime: self.runtime.clone(),
+                };
+
+                let is_async = if let Some(first_stmt) = body.first() {
+                    matches!(first_stmt, Statement::AsyncFunction { .. })
+                } else {
+                    false
+                };
+
+                let result = if is_async {
+                    std::thread::spawn(move || {
+                        function_runtime.runtime.block_on(function_runtime.exec_block_impl(&body))
+                    }).join().unwrap()
+                } else {
+                    self.runtime.block_on(function_runtime.exec_block_impl(&body))
+                };
+                
+                match result {
+                    Ok(()) => {
+                        let vars = vars_arc.lock().unwrap();
+                        if let Some(return_val) = vars.get("retorno") {
+                            Ok(return_val.clone())
+                        } else {
+                            Ok(Value::Number(0))
+                        }
+                    },
+                    Err(e) => Err(e)
                 }
             }
-        } else {
-            for (param, arg) in param_names.iter().zip(args.iter()) {
-                call_vars.insert(param.clone(), arg.clone());
-            }
         }
-        
-        let function_env = Environment {
-            variables: Arc::new(Mutex::new(call_vars)),
-            functions: self.env.functions.clone(),
-            structs: self.env.structs.clone(),
-        };
-        
-        let vars_arc = function_env.variables.clone();
-        
-        let function_runtime = MurlocRuntime {
-            env: function_env,
-            async_manager: AsyncManager::new(),
-            recursion_depth: self.recursion_depth.clone(),
-            max_recursion_depth: self.max_recursion_depth,
-            runtime: self.runtime.clone(),
-        };
-        
-        let result = std::thread::spawn(move || {
-            function_runtime.runtime.block_on(function_runtime.exec_block_impl(&body))
-        }).join().unwrap();
-        
-        let result = match result {
-            Err(e) => match e {
-                ParseError::RuntimeError(RuntimeError::Return(val)) => {
-                    Ok(val)
-                },
-                _ => Err(e),
-            },
-            Ok(()) => {
-                let vars = vars_arc.lock().unwrap();
-                if let Some(return_val) = vars.get("retorno") {
-                    Ok(return_val.clone())
-                } else {
-                    Ok(Value::Number(0))
-                }
-            }
-        };
-        
-        {
-            let mut depth = self.recursion_depth.lock().unwrap();
-            *depth -= 1;
-        }
-        
-        result
     }
 
     async fn call_function_impl(&self, name: &str, local_vars: HashMap<String, Value>, body: &[Statement]) -> RuntimeResult<()> 
     where
         Self: Send + Sync,
     {
-        {
-            let mut depth = self.recursion_depth.lock().unwrap();
-            *depth += 1;
-            
-            if *depth > self.max_recursion_depth {
-                *depth -= 1;
-                return Err(RuntimeError::InvalidOperation(
-                    format!("Stack overflow: Maximum recursion depth ({}) reached in function '{}'", 
-                            self.max_recursion_depth, name)
-                ).into());
-            }
-        }
-        
         let current_vars = self.env.variables.lock().unwrap().clone();
         
         for (param, value) in local_vars.iter() {
@@ -601,7 +575,7 @@ impl MurlocRuntime {
         
         let result = self.exec_block_impl(body).await;
         
-        let retorno = if let Ok(ret) = self.env.get_var("retorno") {
+        let retorno = if let Ok(ret) = self.env.get_var("return") {
             Some(ret)
         } else {
             None
@@ -611,13 +585,8 @@ impl MurlocRuntime {
         *vars = current_vars;
         
         if let Some(ret) = retorno {
-            vars.insert("retorno".to_string(), ret.clone());
+            vars.insert("return".to_string(), ret.clone());
             println!("[INFO] Function '{}' returned {:?}", name, ret);
-        }
-        
-        {
-            let mut depth = self.recursion_depth.lock().unwrap();
-            *depth -= 1;
         }
         
         match result {
@@ -691,26 +660,31 @@ impl MurlocRuntime {
     }
 
     pub fn call_function_from_expression(&self, name: &str, args: Vec<Expression>) -> RuntimeResult<Value> {
-        println!("[INFO] Calling function '{}' as expression with {} arguments", name, args.len());
+        let (param_names, body) = self.env.get_function(name)?;
         
-        {
-            let depth = self.recursion_depth.lock().unwrap();
-            if *depth > self.max_recursion_depth / 2 {
-                println!("[WARN] High recursion depth: {}", *depth);
-                return Err(RuntimeError::InvalidOperation(
-                    format!("Possible infinite loop detected while calling '{}' as expression", name)
-                ).into());
+        let evaluated_args = args.iter()
+            .map(|arg| self.env.evaluate(arg))
+            .collect::<Result<Vec<Value>, ParseError>>()?;
+
+        let mut function_env = self.env.variables.lock()
+            .map_err(|e| RuntimeError::LockError(format!("Failed to lock variables: {}", e)))?
+            .clone();
+
+        for (param, arg) in param_names.iter().zip(evaluated_args.iter()) {
+            function_env.insert(param.clone(), arg.clone());
+        }
+
+        let mut result = Value::Number(0);
+        for stmt in body {
+            match stmt {
+                Statement::Return(expr) => {
+                    result = self.env.evaluate(&expr)?;
+                    break;
+                },
+                _ => continue,
             }
         }
         
-        let evaluated_args = args.iter()
-            .map(|arg| {
-                println!("[INFO] Evaluating argument: {:?}", arg);
-                self.env.evaluate_with_runtime(arg, self)
-            })
-            .collect::<Result<Vec<Value>, ParseError>>()?;
-        
-        println!("[INFO] Arguments evaluated: {:?}, executing function '{}'", evaluated_args, name);
-        self.call_function_expr(name, evaluated_args)
+        Ok(result)
     }
 } 

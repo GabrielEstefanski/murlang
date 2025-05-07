@@ -10,8 +10,8 @@ fn expect_identifier(tokens: &[Token], index: &mut usize) -> Result<String, Pars
             *index += 1;
             Ok(name.clone())
         },
-        Some(tok) => Err(ParseError::UnexpectedToken(format!("Esperado identificador, encontrado {:?}", tok))),
-        None => Err(ParseError::UnexpectedToken("Fim inesperado, esperado identificador".to_string())),
+        Some(tok) => Err(ParseError::UnexpectedToken(format!("Expected identifier, found {:?}", tok))),
+        None => Err(ParseError::UnexpectedToken("Unexpected end, expected identifier".to_string())),
     }
 }
 
@@ -36,10 +36,10 @@ fn expect_token_type(tokens: &[Token], index: &mut usize, expected_type: &str) -
                 *index += 1;
                 Ok(())
             } else {
-                Err(ParseError::UnexpectedToken(format!("Esperado {}, encontrado {:?}", expected_type, token)))
+                Err(ParseError::UnexpectedToken(format!("Expected {}, found {:?}", expected_type, token)))
             }
         },
-        None => Err(ParseError::UnexpectedToken(format!("Fim inesperado, esperado {}", expected_type))),
+        None => Err(ParseError::UnexpectedToken(format!("Unexpected end, expected {}", expected_type))),
     }
 }
 
@@ -49,8 +49,8 @@ fn expect_keyword(tokens: &[Token], index: &mut usize, keyword: &str) -> Result<
             *index += 1;
             Ok(())
         },
-        Some(tok) => Err(ParseError::UnexpectedToken(format!("Esperado keyword '{}', encontrado {:?}", keyword, tok))),
-        None => Err(ParseError::UnexpectedToken(format!("Fim inesperado, esperado keyword '{}'", keyword))),
+        Some(tok) => Err(ParseError::UnexpectedToken(format!("Expected keyword '{}', found {:?}", keyword, tok))),
+        None => Err(ParseError::UnexpectedToken(format!("Unexpected end, expected keyword '{}'", keyword))),
     }
 }
 
@@ -78,7 +78,7 @@ fn parse_function_args(tokens: &[Token], index: &mut usize) -> Result<Vec<Expres
                                     } else if let Ok(n) = num.parse::<num_bigint::BigInt>() {
                                         args.push(Expression::Literal(Value::NumberBig(n)));
                                     } else {
-                                        return Err(ParseError::InvalidValue(format!("Número inválido: {}", num)));
+                                        return Err(ParseError::InvalidValue(format!("Invalid number: {}", num)));
                                     }
                 *index += 1;
                                 },
@@ -98,22 +98,22 @@ fn parse_function_args(tokens: &[Token], index: &mut usize) -> Result<Vec<Expres
                                         } else if let Ok(n) = num.parse::<i64>() {
                                             args.push(Expression::Literal(Value::NumberI64(-n)));
                                         } else {
-                                            return Err(ParseError::InvalidValue(format!("Número inválido: -{}", num)));
+                                            return Err(ParseError::InvalidValue(format!("Invalid number: -{}", num)));
                                         }
                         *index += 1;
                                     } else {
-                                        return Err(ParseError::UnexpectedToken("Esperado número após sinal de menos".to_string()));
+                                        return Err(ParseError::UnexpectedToken("Expected number after minus sign".to_string()));
                                     }
                 }
                                 },
             tok => {
-                return Err(ParseError::UnexpectedToken(format!("Token inesperado nos argumentos da função: {:?}", tok)));
+                return Err(ParseError::UnexpectedToken(format!("Unexpected token in function arguments: {:?}", tok)));
             },
         }
     }
     
     if !(*index > 0 && matches!(&tokens[*index-1], Token::RightParen)) {
-        return Err(ParseError::UnexpectedToken("Faltando parêntese de fechamento após argumentos da função".to_string()));
+        return Err(ParseError::UnexpectedToken("Missing closing parenthesis after function arguments".to_string()));
     }
     
     Ok(args)
@@ -138,7 +138,7 @@ fn parse_function_parameters(tokens: &[Token], index: &mut usize) -> Result<Vec<
                 *index += 1;
             }
             tok => {
-                return Err(ParseError::UnexpectedToken(format!("Token inesperado nos parâmetros da função: {:?}", tok)));
+                return Err(ParseError::UnexpectedToken(format!("Unexpected token in function parameters: {:?}", tok)));
                             }
                         }
     }
@@ -163,11 +163,7 @@ fn parse_function_or_async_function(
     
     expect_keyword(tokens, index, "end")?;
     
-    let parent_scope = if scope_stack.is_empty() { 
-        None 
-    } else { 
-        Some(scope_stack.clone()) 
-    };
+    let parent_scope = (!scope_stack.is_empty()).then(|| scope_stack.clone());
     
     if is_async {
         Ok(Statement::AsyncFunction { name, args, body, parent_scope })
@@ -191,15 +187,25 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 if matches!(tokens.get(i), Some(Token::Keyword(kw)) if kw == "async") {
                     i += 1;
                     
-                    if i < tokens.len() && matches!(tokens.get(i), Some(Token::Keyword(kw)) if kw == "call") {
+                    if matches!(tokens.get(i), Some(Token::Keyword(kw)) if kw == "call") {
                         i += 1;
                         
                         let func_name = expect_identifier(&tokens, &mut i)?;
                         let args = parse_function_args(&tokens, &mut i)?;
                         
-                        let call_stmt = Statement::CallFunction { name: func_name, args };
+                        let call_stmt = Statement::CallFunction { name: func_name.clone(), args: args.clone() };
                         let future_stmt = Statement::SpawnAsync { future: Box::new(call_stmt), thread_name: Some(name.clone()) };
                         stmts.push(future_stmt);
+                        continue;
+                    } else {
+                        i += 1;
+                        let func_name = expect_identifier(&tokens, &mut i)?;
+                        let args = parse_function_args(&tokens, &mut i)?;
+                        
+                        stmts.push(Statement::VarDeclarationExpr(name, Expression::FunctionCall { 
+                            name: func_name.clone(), 
+                            args: args.clone() 
+                        }));
                         continue;
                     }
                 }
@@ -212,7 +218,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 let var_name = name.clone();
                 i += 1;
                 
-                if i < tokens.len() && matches!(tokens.get(i), Some(Token::Assign)) {
+                if i < tokens.len() && matches!(&tokens[i], Token::Assign) {
                     i += 1;
                     let expr = parse_expression(&tokens, &mut i)?;
                     stmts.push(Statement::Assignment(var_name, expr));
@@ -234,56 +240,49 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
 
             Token::Keyword(kw) if kw == "for" => {
                 i += 1;
-            
-                let mut has_equals = false;
-                let mut lookahead = i;
                 
-                while lookahead < tokens.len() && !matches!(&tokens[lookahead], Token::Semicolon) {
-                    if matches!(&tokens[lookahead], Token::Assign) {
-                        has_equals = true;
-                        break;
-                    }
-                    lookahead += 1;
-                }
-                
-                if has_equals {
-                    let init_var = expect_identifier(&tokens, &mut i)?;
-                    expect_token_type(&tokens, &mut i, "Equals")?;
+                if i < tokens.len() && matches!(&tokens[i], Token::Identifier(_)) {
+                    let iterator_var = expect_identifier(&tokens, &mut i)?;
                     
-                    let mut expr_index = i;
-                    let init_value = parse_expression(&tokens, &mut expr_index)?;
-                    i = expr_index;
-                    
-                    expect_token_type(&tokens, &mut i, "Semicolon")?;
-                    
-                    expr_index = i;
-                    let condition = parse_expression(&tokens, &mut expr_index)?;
-                    i = expr_index;
-                    
-                    expect_token_type(&tokens, &mut i, "Semicolon")?;
-            
-                    let increment_var = expect_identifier(&tokens, &mut i)?;
-                    expect_token_type(&tokens, &mut i, "Equals")?;
-                    
-                    expr_index = i;
-                    let increment_expr = parse_expression(&tokens, &mut expr_index)?;
-                    i = expr_index;
-                    
-                    expect_keyword(&tokens, &mut i, "begin")?;
-                    let for_body = parse_block(&tokens, &mut i, None)?;
-                    expect_keyword(&tokens, &mut i, "end")?;
-            
+                    if i < tokens.len() && matches!(&tokens[i], Token::Keyword(kw) if kw == "in") {
+                        i += 1;
+                        let array_name = expect_identifier(&tokens, &mut i)?;
+                        
+                        expect_keyword(&tokens, &mut i, "begin")?;
+                        let body = parse_block(&tokens, &mut i, Some(&scope_stack))?;
+                        expect_keyword(&tokens, &mut i, "end")?;
+                        
+                        stmts.push(Statement::ForInLoop {
+                            iterator_var,
+                            array_name,
+                            body,
+                        });
+                    } else {
+                        expect_token_type(&tokens, &mut i, "Equals")?;
+                        let init_value = parse_expression(&tokens, &mut i)?;
+                        expect_token_type(&tokens, &mut i, "Semicolon")?;
+                        
+                        let condition = parse_expression(&tokens, &mut i)?;
+                        expect_token_type(&tokens, &mut i, "Semicolon")?;
+                        
+                        let increment_var = expect_identifier(&tokens, &mut i)?;
+                        let increment_expr = parse_expression(&tokens, &mut i)?;
+                        
+                        expect_keyword(&tokens, &mut i, "begin")?;
+                        let body = parse_block(&tokens, &mut i, Some(&scope_stack))?;
+                        expect_keyword(&tokens, &mut i, "end")?;
+                        
                         stmts.push(Statement::ForLoop {
-                            init_var,
+                            init_var: iterator_var,
                             init_value,
                             condition,
                             increment_var,
                             increment_expr,
-                        body: for_body
+                            body,
                         });
+                    }
                 } else {
-                    let expr = parse_expression(&tokens, &mut i)?;
-                    stmts.push(Statement::Expr(expr));
+                    return Err(ParseError::UnexpectedToken("Expected identifier after 'for'".to_string()));
                 }
             }
 
@@ -302,7 +301,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
 
                     let field_name = match token {
                         Token::Identifier(name) => name.clone(),
-                        _ => return Err(ParseError::UnexpectedToken(format!("Esperado nome de campo, encontrado {:?}", token))),
+                        _ => return Err(ParseError::UnexpectedToken(format!("Expected field name, found {:?}", token))),
                     };
                     i += 1;
                     expect_token_type(&tokens, &mut i, "Colon")?;
@@ -331,7 +330,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 };
 
                 expect_keyword(&tokens, &mut i, "begin")?;
-                let body = parse_block(&tokens, &mut i, None)?;
+                let body = parse_block(&tokens, &mut i, Some(&scope_stack))?;
                 expect_keyword(&tokens, &mut i, "end")?;
 
                 stmts.push(Statement::Spawn { 
@@ -362,9 +361,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                                 i += 1;
                             }
                             Some(tok) => {
-                                return Err(ParseError::UnexpectedToken(format!("Token inesperado na lista de threads: {:?}", tok)));
+                                return Err(ParseError::UnexpectedToken(format!("Unexpected token in thread list: {:?}", tok)));
                             }
-                            None => return Err(ParseError::UnexpectedToken("Faltando ']' para fechar a lista de threads".to_string())),
+                            None => return Err(ParseError::UnexpectedToken("Missing ']' to close thread list".to_string())),
                         }
                     }
                 } else {
@@ -386,7 +385,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                     i += 1;
                     let error_type = match tokens.get(i) {
                         Some(Token::StringLiteral(msg)) => msg.clone(),
-                        _ => return Err(ParseError::UnexpectedToken("Esperado mensagem de erro após catch".to_string())),
+                        _ => return Err(ParseError::UnexpectedToken("Expected error message after catch".to_string())),
                     };
                     i += 1;
 
@@ -471,7 +470,18 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 i += 1;
                 let name = expect_identifier(&tokens, &mut i)?;
                 let args = parse_function_args(&tokens, &mut i)?;
-                stmts.push(Statement::CallFunction { name, args });
+                
+                let next_token = tokens.get(i);
+                let is_expression = match next_token {
+                    Some(Token::Keyword(_)) | Some(Token::Identifier(_)) | None => true,
+                    _ => false
+                };
+                
+                if is_expression {
+                    stmts.push(Statement::Expr(Expression::FunctionCall { name, args }));
+                } else {
+                    stmts.push(Statement::CallFunction { name, args });
+                }
             }
 
             Token::Keyword(kw) if kw == "return" => {
@@ -528,7 +538,7 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                         let func_name = expect_identifier(&tokens, &mut inner_index)?;
                         let args = parse_function_args(&tokens, &mut inner_index)?;
                         
-                        let call_stmt = Statement::CallFunction { name: func_name, args };
+                        let call_stmt = Statement::CallFunction { name: func_name.clone(), args: args.clone() };
                         let future_stmt = Statement::SpawnAsync { future: Box::new(call_stmt), thread_name: Some(name.clone()) };
                         statements.push(future_stmt);
                         continue;
@@ -623,7 +633,7 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                     inner_index = expr_index;
                     
                     expect_token_type(&tokens, &mut inner_index, "Semicolon")?;
-                    
+            
                     let increment_var = expect_identifier(&tokens, &mut inner_index)?;
                     expect_token_type(&tokens, &mut inner_index, "Equals")?;
                     
@@ -634,7 +644,7 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                     expect_keyword(&tokens, &mut inner_index, "begin")?;
                     let for_body = parse_block(&tokens, &mut inner_index, None)?;
                     expect_keyword(&tokens, &mut inner_index, "end")?;
-                    
+            
                     statements.push(Statement::ForLoop {
                         init_var,
                         init_value,
@@ -644,9 +654,20 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                         body: for_body
                     });
                 } else {
-                    let expr = parse_expression(&tokens, &mut inner_index)?;
-                    statements.push(Statement::Expr(expr));
-                    }
+                    let iterator_var = expect_identifier(&tokens, &mut inner_index)?;
+                    expect_keyword(&tokens, &mut inner_index, "in")?;
+                    let array_name = expect_identifier(&tokens, &mut inner_index)?;
+                    
+                    expect_keyword(&tokens, &mut inner_index, "begin")?;
+                    let body = parse_block(&tokens, &mut inner_index, Some(&scope_stack))?;
+                    expect_keyword(&tokens, &mut inner_index, "end")?;
+                    
+                    statements.push(Statement::ForInLoop {
+                        iterator_var,
+                        array_name,
+                        body,
+                    });
+                }
             }
             Token::Keyword(kw) if kw == "call" => {
                     inner_index += 1;
@@ -683,10 +704,13 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                 };
                 
                 expect_keyword(&tokens, &mut inner_index, "begin")?;
-                let spawn_body = parse_block(tokens, &mut inner_index, None)?;
+                let spawn_body = parse_block(tokens, &mut inner_index, Some(&scope_stack))?;
                 expect_keyword(&tokens, &mut inner_index, "end")?;
                 
-                statements.push(Statement::Spawn { body: spawn_body, thread_name });
+                statements.push(Statement::Spawn { 
+                    body: spawn_body,
+                    thread_name,
+                });
             }
             Token::Keyword(kw) if kw == "wait" => {
                 inner_index += 1;
@@ -710,7 +734,7 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                                 inner_index += 1;
                             }
                             tok => {
-                                return Err(ParseError::UnexpectedToken(format!("Token inesperado na lista de threads: {:?}", tok)));
+                                return Err(ParseError::UnexpectedToken(format!("Unexpected token in thread list: {:?}", tok)));
                             }
                         }
                     }
@@ -721,11 +745,11 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                             inner_index += 1;
                         }
                         tok => {
-                            return Err(ParseError::UnexpectedToken(format!("Esperado identificador após 'wait', encontrado {:?}", tok)));
+                            return Err(ParseError::UnexpectedToken(format!("Expected identifier after 'wait', found {:?}", tok)));
                         }
                     }
                 } else {
-                    return Err(ParseError::UnexpectedToken("Faltando identificador após 'wait'".to_string()));
+                    return Err(ParseError::UnexpectedToken("Missing identifier after 'wait'".to_string()));
                 }
                 
                 statements.push(Statement::Wait { thread_names });

@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::ast::{Statement, Value, Expression, Type};
 use crate::interpreter::error::{RuntimeError, RuntimeResult};
 use crate::interpreter::evaluator::evaluate_expression;
+use crate::value_parser::ParseError;
 
 pub struct Environment {
     pub variables: Arc<Mutex<HashMap<String, Value>>>,
@@ -41,6 +42,14 @@ impl Environment {
             .ok_or_else(|| RuntimeError::InvalidOperation(format!("Function '{}' not found in the ritual book", name)).into())
     }
 
+    pub fn get_function_sync(&self, name: &str) -> Option<(Vec<String>, Vec<Statement>)> {
+        self.functions
+            .lock()
+            .unwrap()
+            .get(name)
+            .cloned()
+    }
+
     pub fn set_function(&self, name: String, args: Vec<String>, body: Vec<Statement>) {
         self.functions.lock().unwrap().insert(name, (args, body));
     }
@@ -58,7 +67,47 @@ impl Environment {
     }
     
     pub fn evaluate_with_runtime(&self, expr: &Expression, runtime: &super::runtime::MurlocRuntime) -> RuntimeResult<Value> {
-        evaluate_expression(expr, &self.variables.lock().unwrap(), Some(runtime))
+        match expr {
+            Expression::FunctionCall { name, args } => {
+                let evaluated_args = args.iter()
+                    .map(|arg| self.evaluate(arg))
+                    .collect::<Result<Vec<Value>, ParseError>>()?;
+                
+                match self.execute_sync_function(name, evaluated_args) {
+                    Ok(result) => Ok(result),
+                    Err(_) => {
+                        evaluate_expression(expr, &self.variables.lock().unwrap(), Some(runtime))
+                    }
+                }
+            },
+            _ => evaluate_expression(expr, &self.variables.lock().unwrap(), Some(runtime))
+        }
+    }
+
+    pub fn execute_sync_function(&self, name: &str, args: Vec<Value>) -> RuntimeResult<Value> {
+        let (param_names, body) = self.get_function_sync(name)
+            .ok_or_else(|| RuntimeError::InvalidOperation(format!("Function '{}' not found in the ritual book", name)))?;
+
+        let mut function_env = self.variables.lock()
+            .map_err(|e| RuntimeError::LockError(format!("Failed to lock variables: {}", e)))?
+            .clone();
+        
+        for (param, arg) in param_names.iter().zip(args.iter()) {
+            function_env.insert(param.clone(), arg.clone());
+        }
+        
+        let mut result = Value::Number(0);
+        for stmt in body {
+            match stmt {
+                Statement::Return(expr) => {
+                    result = self.evaluate(&expr)?;
+                    break;
+                },
+                _ => continue,
+            }
+        }
+        
+        Ok(result)
     }
 }
 

@@ -13,7 +13,7 @@ Murlang is an interpreted programming language with syntax based on "Murloc-spea
 - Type System
 - Error Handling with Murloc-themed messages
 
-## Quick Start
+## Quick Start (Basic Syntax)
 
 ```rust
 // Variable declaration
@@ -29,9 +29,9 @@ grl
 // Struct definition
 rrkgr Murloc
 mrgl
-    nome: blbtxt,    // text type
-    nivel: numblrr,  // number type
-    vida: numblrr,   // number type
+    name: blbtxt,    // text type
+    level: numblrr,  // number type
+    health: numblrr,   // number type
 grl
 
 // Control structures
@@ -44,8 +44,8 @@ mrgl
     glglrr name + " is a young murloc!"
 grl
 
-// Loops
-gglrbl (age > 40)    // while
+// While loop that decrements age until it reaches 40
+gglrbl (age > 40)
 mrgl
     glglrr "Countdown: " + age
     age = age - 1
@@ -57,6 +57,8 @@ grrrblbl greet(name)
 // Struct instance
 grrr murloc_chief = Murloc { nome: "Grrmrgl", nivel: 10, vida: 100 }
 ```
+
+See [examples/run.mur](examples/run.mur) for a complete program.
 
 ## Language Features
 
@@ -127,12 +129,12 @@ mrgl run my_program.mur
 
 ```bash
 mrgl version   # Show Murlang version
-mrgl help      # Show available commands
+mrgl help      # List all available commands
 ```
 
 ## Building from Source
 
-Murlang is built with Rust. To compile:
+Murlang is implemented in Rust. To compile:
 
 ```bash
 cargo build --release
@@ -185,7 +187,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Inspired by the Murlocs from World of Warcraft
-- Built with Rust's amazing ecosystem
+- Powered by Rust’s incredible ecosystem
 - Thanks to all contributors who make Murlang more Murloc-like!
 
 ## MRGLGLGLGL!

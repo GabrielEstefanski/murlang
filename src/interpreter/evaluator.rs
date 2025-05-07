@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::ast::{Value, Expression, BinaryOperator, ComparisonOperator, LogicalOperator, Type};
+use crate::ast::{Value, Expression, BinaryOperator, ComparisonOperator, LogicalOperator, Type, Statement};
 use crate::value_parser::ParseError;
 use crate::interpreter::error::{RuntimeError, RuntimeResult};
 use crate::interpreter::runtime::MurlocRuntime;
@@ -13,16 +13,20 @@ pub fn evaluate_condition(condition: &Expression, env: &HashMap<String, Value>, 
 }
 
 pub fn evaluate_expression(expr: &Expression, env: &HashMap<String, Value>, runtime: Option<&MurlocRuntime>) -> RuntimeResult<Value> {
+    println!("[DEBUG] evaluate_expression: avaliando {:?}", expr);
     match expr {
         Expression::Equals(_name, value) => {
+            println!("[DEBUG] evaluate_expression: Equals");
             Ok(Value::Number(*value))
         },
         Expression::BinaryOp { left, right, op } => {
+            println!("[DEBUG] evaluate_expression: BinaryOp");
             let left_val = evaluate_expression(left, env, runtime)?;
             let right_val = evaluate_expression(right, env, runtime)?;
             eval_binary_operation(&left_val, &right_val, op)
         },
         Expression::Comparison { left, right, op } => {
+            println!("[DEBUG] evaluate_expression: Comparison");
             let left_val = evaluate_expression(left, env, runtime)?;
             let right_val = evaluate_expression(right, env, runtime)?;
             
@@ -38,6 +42,7 @@ pub fn evaluate_expression(expr: &Expression, env: &HashMap<String, Value>, runt
             Ok(Value::Number(if result { 1 } else { 0 }))
         },
         Expression::LogicalOp { left, right, op } => {
+            println!("[DEBUG] evaluate_expression: LogicalOp");
             let left_val = evaluate_expression(left, env, runtime)?;
             
             match op {
@@ -66,8 +71,12 @@ pub fn evaluate_expression(expr: &Expression, env: &HashMap<String, Value>, runt
                 }
             }
         },
-        Expression::Literal(value) => Ok(value.clone()),
+        Expression::Literal(value) => {
+            println!("[DEBUG] evaluate_expression: Literal {:?}", value);
+            Ok(value.clone())
+        },
         Expression::Variable(name) => {
+            println!("[DEBUG] evaluate_expression: Variable {}", name);
             if let Some(value) = env.get(name) {
                 Ok(value.clone())
             } else {
@@ -102,11 +111,12 @@ pub fn evaluate_expression(expr: &Expression, env: &HashMap<String, Value>, runt
             }
         },
         Expression::FunctionCall { name, args } => {
+            println!("[DEBUG] evaluate_expression: FunctionCall {} com {} argumentos", name, args.len());
             if let Some(rt) = runtime {
                 rt.call_function_from_expression(name, args.clone())
             } else {
                 Err(ParseError::InvalidValue(format!(
-                    "Runtime required to execute function '{}' in expression context",
+                    "Function '{}' requires runtime for execution",
                     name
                 )))
             }
@@ -153,6 +163,20 @@ pub fn evaluate_expression(expr: &Expression, env: &HashMap<String, Value>, runt
                 }
             } else {
                 Err(ParseError::InvalidValue("Runtime required to create struct instance".to_string()))
+            }
+        },
+        Expression::InOperator { left, right } => {
+            let left_val = evaluate_expression(left, env, runtime)?;
+            let right_val = evaluate_expression(right, env, runtime)?;
+            
+            match (&left_val, &right_val) {
+                (Value::Text(item), Value::Array(arr)) => {
+                    Ok(Value::Number(if arr.contains(&Value::Text(item.clone())) { 1 } else { 0 }))
+                },
+                (Value::Number(item), Value::Array(arr)) => {
+                    Ok(Value::Number(if arr.contains(&Value::Number(*item)) { 1 } else { 0 }))
+                },
+                _ => Err(ParseError::InvalidValue("Operador 'in' só pode ser usado com arrays no reino dos murlocs".to_string())),
             }
         },
     }

@@ -1,11 +1,14 @@
+// 🐟 Variables
 grrr name = "Mrglglgl"
 grrr age = 42
 
+// 🐟 Function with parameter and return
 grrrfnrrg greeting(name)
 mrgl
     glglrr "Hello, " + name + "!"
 grl
 
+// 🐟 Struct definition
 rrkgr Murloc
 mrgl
     name: blbtxt,
@@ -13,8 +16,15 @@ mrgl
     health: numblrr,
 grl
 
-grrip types ["Coastal", "Deep", "Warrior"]
+// 🐟 Array and for-loop
+grrip clan ["Mrggl", "Brgl", "Trgl"]
 
+mrrg member mrglin clan
+mrgl
+    glglrr "Murloc in clan: " + member
+grl
+
+// 🐟 If/Else condition
 grlbrr (age > 30)
 mrgl
     glglrr name + " is a wise murloc!"
@@ -24,6 +34,7 @@ mrgl
     glglrr name + " is a young murloc!"
 grl
 
+// 🐟 While loop with break
 gglrbl (age > 40)
 mrgl
     glglrr "Countdown: " + age
@@ -35,11 +46,73 @@ mrgl
     grl
 grl
 
+// 🐟 Function call
 grrrblbl greeting(name)
 
+// 🐟 Struct instance
 grrr chief_murloc = Murloc { name: "Grrmrgl", level: 10, health: 100 }
 glglrr "Chief murloc: " + chief_murloc.name + ", Level: " + chief_murloc.level
 
+glglrr chief_murloc.level
+
+// 🐟 Function that returns a value
+grrrfnrrg calculate_experience(level)
+mrgl
+    grrr experience = level * 100
+    grrrtn experience
+grl
+
+grrrblbl calculate_experience(2)
+glglrr "Chief XP: " + xp
+
+// 🐟 Switch (murrrgh)
+grrr murloc_type = "Deep"
+
+murrrgh murloc_type
+mrgl
+    case "Coastal":
+        glglrr "Lives near the shore."
+    case "Deep":
+        glglrr "Dwells in dark waters."
+    case "Warrior":
+        glglrr "Fights with claws and rage!"
+    default:
+        glglrr "Unknown Murloc type."
+grl
+
+// 🐟 Function modifying struct
+grrrfnrrg heal(murloc)
+mrgl
+    murloc.health = murloc.health + 50
+    grrrtn murloc
+grl
+
+grrr healed_chief = grrrblbl heal(chief_murloc)
+glglrr "Healed Murloc: " + healed_chief.name + ", HP: " + healed_chief.health
+
+// 🐟 Async/Await
+mrglasync grrrfnrrg fetch_treasure()
+mrgl
+    glglrr "Searching for treasure..."
+    grrrtn "Golden Fish!"
+grl
+
+grrr treasure = fetch_treasure()
+glglrr "Treasure found: " + treasure
+
+// 🐟 Try/Catch
+mrglswim
+mrgl
+    glglrr "Trying dangerous operation..."
+    grrr result = risky_function()   // This should trigger error if not defined
+    glglrr "Success: " + result
+grl
+mrglcatch
+mrgl
+    glglrr "MRGL ERROR: "
+grl
+
+// 🐟 Threading
 splurg
 mrgl
     glglrr "Running on a separate thread..."

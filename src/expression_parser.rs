@@ -20,6 +20,14 @@ fn parse_logical_or(tokens: &[Token], i: &mut usize) -> Result<Expression, Parse
                     op: LogicalOperator::Or,
                 };
             }
+            Token::Keyword(kw) if kw == "in" => {
+                *i += 1;
+                let right = parse_logical_and(tokens, i)?;
+                expr = Expression::InOperator {
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                };
+            }
             _ => break,
         }
     }
@@ -277,7 +285,18 @@ fn parse_primary(tokens: &[Token], i: &mut usize) -> Result<Expression, ParseErr
         },
         Token::Identifier(name) => {
             *i += 1;
-            if *i < tokens.len() && matches!(&tokens[*i], Token::LeftBrace) {
+            if *i < tokens.len() && matches!(&tokens[*i], Token::Dot) {
+                *i += 1;
+                let field_name = match &tokens[*i] {
+                    Token::Identifier(field) => field.clone(),
+                    _ => return Err(ParseError::UnexpectedToken(format!("Esperado nome do campo após '.', encontrado {:?}", tokens[*i]))),
+                };
+                *i += 1;
+                Ok(Expression::StructAccess {
+                    name: name.clone(),
+                    field: field_name,
+                })
+            } else if *i < tokens.len() && matches!(&tokens[*i], Token::LeftBrace) {
                 *i += 1;
                 let mut fields = Vec::new();
                 

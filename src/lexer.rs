@@ -81,7 +81,8 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("blrrgl", "else"),
     ("grrrtn", "return"),
     ("blbtxt", "text"),
-    ("numblrr", "number")
+    ("numblrr", "number"),
+    ("mrglin", "in")
 ];
 
 pub struct Lexer<'a> {

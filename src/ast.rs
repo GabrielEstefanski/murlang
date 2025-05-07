@@ -21,6 +21,11 @@ pub enum Statement {
         increment_expr: Expression,
         body: Vec<Statement>,
     },
+    ForInLoop {
+        iterator_var: String,
+        array_name: String,
+        body: Vec<Statement>,
+    },
     Loop {
         variable: String,
         start: i32,
@@ -155,7 +160,7 @@ impl fmt::Display for Value {
                     if !first {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", value)?;
+                    write!(f, "{}: {}", field, value)?;
                     first = false;
                 }
                 Ok(())
@@ -338,6 +343,20 @@ impl Expression {
                     Err(ParseError::InvalidValue(format!("Struct '{}' not found in the cosmic void", struct_name)))
                 }
             },
+            Expression::InOperator { left, right } => {
+                let left_val = left.eval(env)?;
+                let right_val = right.eval(env)?;
+                
+                match (&left_val, &right_val) {
+                    (Value::Text(item), Value::Array(arr)) => {
+                        Ok(Value::Number(if arr.contains(&Value::Text(item.clone())) { 1 } else { 0 }))
+                    },
+                    (Value::Number(item), Value::Array(arr)) => {
+                        Ok(Value::Number(if arr.contains(&Value::Number(*item)) { 1 } else { 0 }))
+                    },
+                    _ => Err(ParseError::InvalidValue("Operador 'in' só pode ser usado com arrays no reino dos murlocs".to_string())),
+                }
+            },
         }
     }
 }
@@ -428,6 +447,10 @@ pub enum Expression {
     FunctionCall {
         name: String,
         args: Vec<Expression>,
+    },
+    InOperator {
+        left: Box<Expression>,
+        right: Box<Expression>,
     },
 }
 
