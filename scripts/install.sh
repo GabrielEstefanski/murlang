@@ -1,82 +1,69 @@
 #!/bin/bash
 
-echo "Mrglglglgl! Instalando Murlang!"
+echo "Mrglglglgl! Installing Murlang!"
 
-# Verifica se o diretório bin existe
+# Create bin directory if it doesn't exist
 mkdir -p "$(dirname "$0")/../bin"
 
-# Compila o executável
-echo "Mrglgrgl... Compilando executável..."
+# Compile the executable
+echo "Mrglgrgl... Compiling executable..."
 pushd "$(dirname "$0")/.." > /dev/null
 cargo build --release
 if [ $? -ne 0 ]; then
-    echo "Aaaaaughibbrgubugbugrguburglegrrr! Erro na compilação!"
+    echo "Aaaaaughibbrgubugbugrguburglegrrr! Error compiling!"
     exit 1
 fi
 cp "target/release/mur_lang" "bin/murlang"
 chmod +x "bin/murlang"
 popd > /dev/null
 
-# Cria o script wrapper
-echo "Mrglmrgl... Criando wrapper..."
+# Create wrapper script
+echo "Creating wrapper..."
 cat > "$(dirname "$0")/../bin/mrgl" << 'EOL'
 #!/bin/bash
 # Murlang Runner - Mrglglgl!
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export MURLANG_HOME="$(dirname "$SCRIPT_DIR")"
-export MURLANG_VERSION="1.0.0"
 
 if [ "$1" = "run" ]; then
     if [ -z "$2" ]; then
-        echo "Mrglgrgl! Especifique um arquivo .mur para executar!"
+        echo "Mrglgrgl! Specify a .mur file to execute!"
         exit 1
     fi
     "$MURLANG_HOME/bin/murlang" "$2"
     exit $?
 fi
 
-if [ "$1" = "version" ]; then
-    echo "Mrglglgl! Murlang versão $MURLANG_VERSION"
-    exit 0
-fi
-
 if [ "$1" = "help" ]; then
-    echo "Mrglglglgl! Comandos disponíveis:"
-    echo "  mrgl run <arquivo.mur>    - Executa um programa Murlang"
-    echo "  mrgl version          - Mostra a versão do Murlang"
-    echo "  mrgl help             - Mostra esta ajuda"
+    echo "Mrglglglgl! Available commands:"
+    echo "  mrgl run <file.mur>    - Runs a Murlang program"
+    echo "  mrgl help             - Shows this help"
     exit 0
 fi
 
-echo "Mrglglgl? Comando desconhecido. Use 'mrgl help' para ajuda."
+echo "Mrglglgl? Unknown command. Use 'mrgl help' for help."
 exit 1
 EOL
 
 chmod +x "$(dirname "$0")/../bin/mrgl"
 
-# Cria um script de ambiente
-echo "Mrglglgl... Criando script de ambiente..."
-cat > "$(dirname "$0")/../bin/activate" << 'EOL'
-#!/bin/bash
-# Murlang Environment Setup
+# Add to PATH
+echo "Adding to PATH..."
+BIN_PATH="$(dirname "$0")/../bin"
+echo "export PATH=\"$BIN_PATH:\$PATH\"" >> ~/.bashrc
+echo "export MURLANG_HOME=\"$(dirname "$BIN_PATH")\"" >> ~/.bashrc
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export MURLANG_HOME="$(dirname "$SCRIPT_DIR")"
-export PATH="$MURLANG_HOME/bin:$PATH"
+# Source the changes
+source ~/.bashrc
 
-echo "Mrglglglgl! Ambiente Murlang ativado!"
-echo "Use 'mrgl help' para ver os comandos disponíveis."
-EOL
-
-chmod +x "$(dirname "$0")/../bin/activate"
-
-echo "Mrglglglgl! Instalação concluída!"
 echo ""
-echo "Para usar o Murlang, adicione $(dirname "$0")/../bin ao seu PATH ou execute:"
-echo "    source $(dirname "$0")/../bin/activate"
+echo "Mglrmglmglmgl! Installation completed!"
 echo ""
-echo "Depois, você pode executar:"
-echo "    mrgl run seu_arquivo.mur"
+echo "To use Murlang, try:"
+echo "    mrgl help"
 echo ""
-echo "Glrglmrgl! Boa programação!" 
+echo "If the command is not recognized, try running:"
+echo "    $BIN_PATH/mrgl help"
+echo ""
+echo "Aaaaaughibbrgubugbugrguburgle!" 
