@@ -230,56 +230,7 @@ fn parse_primary(tokens: &[Token], i: &mut usize) -> Result<Expression, ParseErr
                     }
                     
                     Ok(Expression::FunctionCall { name: func_name, args })
-                },
-                "math" => {
-                    let func_name = kw.clone();
-                    let mut args = Vec::new();
-                    let start_pos = *i;
-                    
-                    if *i < tokens.len() && matches!(&tokens[*i], Token::LeftParen) {
-                        *i += 1;
-                        
-                        while *i < tokens.len() {
-                            if matches!(&tokens[*i], Token::RightParen) {
-                                *i += 1;
-                                break;
-                            }
-                            
-                            match &tokens[*i] {
-                                Token::Identifier(var_name) => {
-                                    args.push(Expression::Variable(var_name.clone()));
-                                    *i += 1;
-                                },
-                                Token::Number(num) => {
-                                    if let Ok(n) = num.parse::<i32>() {
-                                        args.push(Expression::Literal(Value::Number(n)));
-                                    } else if let Ok(n) = num.parse::<i64>() {
-                                        args.push(Expression::Literal(Value::NumberI64(n)));
-                                    } else if let Ok(n) = num.parse::<num_bigint::BigInt>() {
-                                        args.push(Expression::Literal(Value::NumberBig(n)));
-                                    } else {
-                                        return Err(ParseError::InvalidValue(format!("Invalid number in the cosmic void: {} at position {}", num, i)));
-                                    }
-                                    *i += 1;
-                                },
-                                Token::StringLiteral(text) => {
-                                    args.push(Expression::Literal(Value::Text(text.clone())));
-                                    *i += 1;
-                                },
-                                Token::Comma => {
-                                    *i += 1;
-                                },
-                                _ => break,
-                            }
-                        }
-                    }
-                    
-                    if *i >= tokens.len() || !matches!(&tokens[*i-1], Token::RightParen) {
-                        return Err(ParseError::MissingToken(format!("Missing ')' to close {} function call at position {}", func_name, start_pos)));
-                    }
-                    
-                    Ok(Expression::FunctionCall { name: func_name, args })
-                },
+                }
                 _ => Err(ParseError::UnexpectedToken(format!("Unexpected keyword in the cosmic void: {} at position {}", kw, i))),
             }
         },

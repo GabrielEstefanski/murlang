@@ -11,9 +11,17 @@ if "%1"=="run" (
 )
 
 if "%1"=="help" (
-    echo Mrglglglgl! Commands available:
-    echo   mrgl run <file.mur>    - Runs a Murlang program
-    echo   mrgl help             - Shows this help
+    "%MURLANG_HOME%\bin\murlang.exe" help
+    exit /b 0
+)
+
+if "%1"=="--version" (
+    "%MURLANG_HOME%\bin\murlang.exe" --version
+    exit /b 0
+)
+
+if "%1"=="-V" (
+    "%MURLANG_HOME%\bin\murlang.exe" --version
     exit /b 0
 )
 

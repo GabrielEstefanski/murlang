@@ -1,11 +1,10 @@
 #!/bin/bash
 
-echo "Mrglglglgl! Installing Murlang!"
+cat "$(dirname "$0")/banner.txt"
+echo ""
 
-# Create bin directory if it doesn't exist
 mkdir -p "$(dirname "$0")/../bin"
 
-# Compile the executable
 echo "Mrglgrgl... Compiling executable..."
 pushd "$(dirname "$0")/.." > /dev/null
 cargo build --release
@@ -17,7 +16,6 @@ cp "target/release/mur_lang" "bin/murlang"
 chmod +x "bin/murlang"
 popd > /dev/null
 
-# Create wrapper script
 echo "Creating wrapper..."
 cat > "$(dirname "$0")/../bin/mrgl" << 'EOL'
 #!/bin/bash
@@ -36,9 +34,12 @@ if [ "$1" = "run" ]; then
 fi
 
 if [ "$1" = "help" ]; then
-    echo "Mrglglglgl! Available commands:"
-    echo "  mrgl run <file.mur>    - Runs a Murlang program"
-    echo "  mrgl help             - Shows this help"
+    "$MURLANG_HOME/bin/murlang" help
+    exit 0
+fi
+
+if [ "$1" = "--version" ] || [ "$1" = "-V" ]; then
+    "$MURLANG_HOME/bin/murlang" --version
     exit 0
 fi
 
@@ -48,13 +49,11 @@ EOL
 
 chmod +x "$(dirname "$0")/../bin/mrgl"
 
-# Add to PATH
 echo "Adding to PATH..."
 BIN_PATH="$(dirname "$0")/../bin"
 echo "export PATH=\"$BIN_PATH:\$PATH\"" >> ~/.bashrc
 echo "export MURLANG_HOME=\"$(dirname "$BIN_PATH")\"" >> ~/.bashrc
 
-# Source the changes
 source ~/.bashrc
 
 echo ""

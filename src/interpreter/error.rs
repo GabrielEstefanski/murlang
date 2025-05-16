@@ -16,6 +16,8 @@ pub enum RuntimeError {
     Return(Value),
     LexerError(String),
     LockError(String),
+    Break,
+    Continue,
 }
 
 impl From<RuntimeError> for ParseError {
@@ -33,6 +35,8 @@ impl From<RuntimeError> for ParseError {
             RuntimeError::IndexOutOfBounds(msg) => ParseError::InvalidValue(format!("You swam beyond the coral bounds! Index chaos: {}", msg)),
             RuntimeError::FileError(msg) => ParseError::InvalidValue(format!("Scroll drowned! File error in the shell archive: {}", msg)),
             RuntimeError::LockError(msg) => ParseError::InvalidValue(format!("Lock error: {}", msg)),
+            RuntimeError::Break => ParseError::RuntimeError(RuntimeError::Break),
+            RuntimeError::Continue => ParseError::RuntimeError(RuntimeError::Continue),
         }
     }
 }
@@ -52,6 +56,8 @@ impl fmt::Display for RuntimeError {
             RuntimeError::IndexOutOfBounds(msg) => write!(f, "You swam beyond the coral bounds! Index chaos: {}", msg),
             RuntimeError::FileError(msg) => write!(f, "Scroll drowned! File error in the shell archive: {}", msg),
             RuntimeError::LockError(msg) => write!(f, "Lock error: {}", msg),
+            RuntimeError::Break => write!(f, "Loop ritual broken!"),
+            RuntimeError::Continue => write!(f, "Loop ritual continued!"),
         }
     }
 }

@@ -54,35 +54,29 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("grlbrr", "if"),
     ("grrrfnrrg", "fn"),
     ("grrrblbl", "call"),
-    ("blgrrimport", "import"),
     ("mrrg", "for"),
     ("mrgl", "begin"),
     ("grl", "end"),
-    ("gglrbl ", "while"),
+    ("gglrbl", "while"),
     ("murrrgh", "switch"),
-    ("blgrrstop", "break"),
-    ("blgrrkeep", "continue"),
+    ("flurg", "break"),
+    ("flllurlog", "continue"),
     ("glglrr", "print"),
-    ("glurp", "read"),
-    ("mthgrrr", "math"),
     ("splurg", "spawn"),
     ("grrsync", "sync"),
     ("grrip", "array"),
     ("rrkgr", "struct"),
-    ("mrglwait", "wait"),
-    ("mrglasync", "async"),
-    ("mrglawait", "await"),
+    ("argl", "async"),
+    ("mrgargl", "await"),
+    ("mrgurl", "wait"),
     ("fshpool", "threadpool"),
-    ("fshpoolsize", "poolsize"),
-    ("mrglwhen", "when"),
+    ("mrglgl", "try"),
     ("mrglcatch", "catch"),
-    ("mrglswim", "try"),
-    ("mrglschool", "group"),
     ("blrrgl", "else"),
     ("grrrtn", "return"),
     ("blbtxt", "text"),
     ("numblrr", "number"),
-    ("mrglin", "in")
+    ("blgr", "in"),
 ];
 
 pub struct Lexer<'a> {
@@ -265,6 +259,53 @@ impl<'a> Lexer<'a> {
                             break;
                         } else {
                             self.column += 1;
+                        }
+                    }
+                    
+                    return Ok(SpannedToken {
+                        token: Token::Divide,
+                        line: 0,
+                        column: 0,
+                    });
+                } else if self.chars.peek() == Some(&'*') {
+                    self.chars.next();
+                    self.column += 1;
+                    
+                    let mut nested_level = 1;
+                    while nested_level > 0 {
+                        match self.chars.next() {
+                            Some('*') => {
+                                if self.chars.peek() == Some(&'/') {
+                                    self.chars.next();
+                                    self.column += 2;
+                                    nested_level -= 1;
+                                } else {
+                                    self.column += 1;
+                                }
+                            },
+                            Some('/') => {
+                                if self.chars.peek() == Some(&'*') {
+                                    self.chars.next();
+                                    self.column += 2;
+                                    nested_level += 1;
+                                } else {
+                                    self.column += 1;
+                                }
+                            },
+                            Some('\n') => {
+                                self.line += 1;
+                                self.column = 1;
+                            },
+                            Some(_) => {
+                                self.column += 1;
+                            },
+                            None => {
+                                return Err(LexerError {
+                                    message: format!("Block comment not closed at line {} column {}", self.line, start_column),
+                                    line: self.line,
+                                    column: start_column,
+                                });
+                            }
                         }
                     }
                     

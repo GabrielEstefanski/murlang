@@ -1,11 +1,13 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::fs;
 use std::io;
 use tokio::runtime::Runtime;
-use log::{info, warn, error};
+use log::{warn, error};
+use std::time::Duration;
 
-use crate::ast::{Statement, Value, Expression, Type };
+use crate::ast::{Statement, Value, Expression, Type, ImportSpecifier};
 use crate::value_parser::ParseError;
 
 use crate::interpreter::environment::Environment;
@@ -23,7 +25,11 @@ pub struct MurlocRuntime {
 
 impl MurlocRuntime {
     pub fn new() -> Self {
-        let runtime = Runtime::new().expect("Failed to create Tokio runtime");
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
         
         Self {
             env: Environment::new(),
@@ -37,6 +43,15 @@ impl MurlocRuntime {
     pub fn run(&self, statements: Vec<Statement>) -> Result<(), ParseError> {
         self.runtime.block_on(async {
             self.exec_block_impl(&statements).await
+        })
+    }
+
+    pub fn execute_statement_boxed<'a>(
+        &'a self,
+        statement: &'a Statement,
+    ) -> Pin<Box<dyn Future<Output = RuntimeResult<()>> + 'a>> {
+        Box::pin(async move {
+            self.execute_statement(statement).await
         })
     }
 
@@ -64,7 +79,7 @@ impl MurlocRuntime {
         Self: Send + Sync,
     {
         match statement {
-            Statement::AsyncFunction { name, args, body, parent_scope } => {
+            Statement::AsyncFunction { name, args, body, parent_scope: _ } => {
                 self.env.set_function(name.to_string(), args.clone(), body.clone());
                 Ok::<(), ParseError>(())
             },
@@ -84,6 +99,7 @@ impl MurlocRuntime {
                             variables: vars_shared,
                             functions: funcs_shared,
                             structs: structs_shared,
+                            exports: Arc::new(Mutex::new(HashMap::new())),
                         },
                         async_manager: AsyncManager::new(),
                         recursion_depth: recursion_depth_clone,
@@ -91,10 +107,18 @@ impl MurlocRuntime {
                         runtime: runtime_clone,
                     };
                     
-                    runtime_for_block_on.block_on(thread_runtime.exec_block_impl(&body_clone))
+                    match runtime_for_block_on.block_on(async {
+                        tokio::time::timeout(
+                            Duration::from_secs(30),
+                            thread_runtime.exec_block_impl(&body_clone)
+                        ).await
+                    }) {
+                        Ok(result) => result,
+                        Err(_) => Err(RuntimeError::AsyncError("Thread timeout after 30 seconds".to_string()).into())
+                    }
                 });
                 
-                self.async_manager.register_thread(thread_name.clone(), handle);
+                self.async_manager.register_thread(thread_name.clone(), handle)?;
                 Ok(())
             },
             Statement::SpawnAsync { future, thread_name } => {
@@ -127,6 +151,7 @@ impl MurlocRuntime {
                             variables: Arc::new(Mutex::new(vars_copy)),
                             functions: Arc::new(Mutex::new(funcs_copy)),
                             structs: Arc::new(Mutex::new(structs_copy)),
+                            exports: Arc::new(Mutex::new(HashMap::new())),
                         },
                         async_manager: AsyncManager::new(),
                         recursion_depth: recursion_depth_clone,
@@ -137,7 +162,7 @@ impl MurlocRuntime {
                     runtime_for_block_on.block_on(thread_runtime.exec_block_impl(&[future_clone]))
                 });
                 
-                self.async_manager.register_thread(thread_name.clone(), handle);
+                self.async_manager.register_thread(thread_name.clone(), handle)?;
                 Ok(())
             },
             Statement::ThreadPool { size, tasks } => {
@@ -175,7 +200,6 @@ impl MurlocRuntime {
                 Ok(())
             },
             Statement::Await { future } => {
-                info!("Waiting for future to complete...");
                 let future_clone = (**future).clone();
                 
                 let result_variables = Arc::new(Mutex::new(HashMap::new()));
@@ -184,6 +208,7 @@ impl MurlocRuntime {
                     variables: self.env.variables.clone(),
                     functions: self.env.functions.clone(),
                     structs: self.env.structs.clone(),
+                    exports: self.env.exports.clone(),
                 };
                 
                 let runtime_clone = self.runtime.clone();
@@ -238,7 +263,6 @@ impl MurlocRuntime {
                     }
                 }
                 
-                info!("Future completed");
                 result
             },
             _ => self.execute_non_async_statement(statement).await,
@@ -250,7 +274,7 @@ impl MurlocRuntime {
         Self: Send + Sync,
     {
         match statement {
-            Statement::Import(path) => {
+            Statement::Import { path, imports } => {
                 let contents = fs::read_to_string(path)
                     .map_err(|e| RuntimeError::InvalidOperation(format!("Error importing '{}': {}", path, e)))?;
                 
@@ -273,17 +297,83 @@ impl MurlocRuntime {
                         _ => ParseError::InvalidValue(format!("Parse error: {}", e))
                     }
                 })?;
-                self.exec_block_impl(&imported_stmts).await?;
-                Ok::<(), ParseError>(())
+
+                let module_env = Environment::new();
+                let module_runtime = MurlocRuntime {
+                    env: module_env,
+                    async_manager: AsyncManager::new(),
+                    recursion_depth: self.recursion_depth.clone(),
+                    max_recursion_depth: self.max_recursion_depth,
+                    runtime: self.runtime.clone(),
+                };
+
+                module_runtime.exec_block_impl(&imported_stmts).await?;
+
+                for import in imports {
+                    match import {
+                        ImportSpecifier::Default(name) => {
+                            let exports = module_runtime.env.exports.lock()
+                                .map_err(|e| RuntimeError::LockError(format!("Failed to lock exports: {}", e)))?;
+                            
+                            if let Some((export_name, _)) = exports.iter().find(|(_, is_default)| **is_default) {
+                                if let Ok(value) = module_runtime.env.get_var(export_name) {
+                                    self.env.set_var(name.clone(), value);
+                                }
+                            } else {
+                                return Err(RuntimeError::InvalidOperation(
+                                    format!("No default export found in module '{}'", path)
+                                ).into());
+                            }
+                        },
+                        ImportSpecifier::Named(original, alias) => {
+                            if module_runtime.env.is_exported(&original)? {
+                                if let Ok(value) = module_runtime.env.get_var(&original) {
+                                    self.env.set_var(alias.clone(), value);
+                                }
+                            } else {
+                                return Err(RuntimeError::InvalidOperation(
+                                    format!("Export '{}' not found in module '{}'", original, path)
+                                ).into());
+                            }
+                        },
+                        ImportSpecifier::Namespace(namespace) => {
+                            let exports = module_runtime.env.exports.lock()
+                                .map_err(|e| RuntimeError::LockError(format!("Failed to lock exports: {}", e)))?;
+                            
+                            let mut namespace_vars = HashMap::new();
+                            for (export_name, _) in exports.iter() {
+                                if let Ok(value) = module_runtime.env.get_var(export_name) {
+                                    namespace_vars.insert(export_name.clone(), value);
+                                }
+                            }
+                            
+                            self.env.set_var(namespace.clone(), Value::Struct(namespace.to_string(), namespace_vars.into_iter().collect()));
+                        },
+                        ImportSpecifier::Specific(name) => {
+                            if module_runtime.env.is_exported(&name)? {
+                                if let Ok(value) = module_runtime.env.get_var(&name) {
+                                    self.env.set_var(name.clone(), value);
+                                }
+                            } else {
+                                return Err(RuntimeError::InvalidOperation(
+                                    format!("Export '{}' not found in module '{}'", name, path)
+                                ).into());
+                            }
+                        },
+                    }
+                }
+                Ok(())
             },
-            Statement::Function { name, args, body, parent_scope } => {
+            Statement::Export { name, is_default } => {
+                self.env.add_export(name.clone(), *is_default)?;
+                Ok(())
+            },
+            Statement::Function { name, args, body, parent_scope: _ } => {
                 self.env.set_function(name.to_string(), args.clone(), body.clone());
-                info!("Function '{}' defined", name);
                 Ok(())
             },
             Statement::VarDeclaration(name, value) => {
                 self.env.set_var(name.to_string(), value.clone());
-                info!("{} = {:?}", name, value);
                 Ok(())
             },
             Statement::VarDeclarationExpr(name, expr) => {
@@ -307,26 +397,22 @@ impl MurlocRuntime {
                     }
                 }
                 
-                info!("{} = {:?}", name, &value);
                 self.env.set_var(name.to_string(), value);
                 Ok(())
             },
             Statement::Assignment(name, expr) => {
                 let value = self.env.evaluate_with_runtime(expr, self)?;
                 self.env.set_var(name.to_string(), value.clone());
-                println!("[INFO] {} = {:?}", name, &value);
                 Ok(())
             },
             Statement::CallFunction { name, args } => {
-                println!("[INFO] Callingdasdasdsa function '{}'...", name);
-                
                 let (params, body) = self.env.get_function(name)?;
 
                 let mut local_vars: HashMap<String, Value> = HashMap::new();
 
                 if !args.is_empty() {
                     if args.len() != params.len() {
-                        println!("[WARN] Number of arguments ({}) different from number of parameters ({}) for function '{}'",
+                        warn!("[WARN] Number of arguments ({}) different from number of parameters ({}) for function '{}'",
                                 args.len(), params.len(), name);
                     }
                     
@@ -336,22 +422,40 @@ impl MurlocRuntime {
                         if i < params.len() {
                             let arg_value = evaluate_expression(arg, &env_vars, Some(self))?;
                             local_vars.insert(params[i].clone(), arg_value.clone());
-                            println!("[INFO] Parameter {}: {} = {:?}", i + 1, params[i], arg_value);
                         }
                     }
                 }
                 
                 Box::pin(self.call_function_impl(name, local_vars, &body)).await
             },
-            Statement::IfStatement { condition, body } => {
+            Statement::IfStatement { condition, body, else_branch } => {
                 if evaluate_condition(condition, &self.env.variables.lock().unwrap(), Some(self)) {
                     self.exec_block_impl(body).await?;
+                } else if let Some(else_stmt) = else_branch {
+                    self.execute_statement_boxed(else_stmt).await?;
                 }
                 Ok(())
             },
             Statement::WhileLoop { condition, body } => {
-                while evaluate_condition(condition, &self.env.variables.lock().unwrap(), Some(self)) {
-                    self.exec_block_impl(body).await?;
+                loop {
+                    let condition_result = {
+                        let vars = self.env.variables.lock()
+                            .map_err(|e| RuntimeError::LockError(format!("Failed to lock variables: {}", e)))?;
+                        let result = evaluate_condition(condition, &vars, Some(self));
+                        result
+                    };
+
+                    if !condition_result {
+                        break;
+                    }
+
+                    if let Err(e) = self.exec_block_impl(body).await {
+                        match &e {
+                            ParseError::RuntimeError(RuntimeError::Break) => break,
+                            ParseError::RuntimeError(RuntimeError::Continue) => continue,
+                            _ => return Err(e),
+                        }
+                    }
                 }
                 Ok(())
             },
@@ -363,7 +467,6 @@ impl MurlocRuntime {
             Statement::Return(expr) => {
                 let value = self.env.evaluate_with_runtime(expr, self)?;
                 self.env.set_var("retorno".to_string(), value.clone());
-                println!("[INFO] Returning value: {:?}", value);
   
                 return Err(RuntimeError::Return(value).into());
             },
@@ -386,7 +489,6 @@ impl MurlocRuntime {
                 let mut structs = self.env.structs.lock()
                     .map_err(|e| RuntimeError::LockError(format!("Failed to lock structs: {}", e)))?;
                 structs.insert(name.to_string(), fields.clone());
-                info!("Struct '{}' defined with {} fields", name, fields.len());
                 Ok(())
             },
             Statement::Loop { variable, start, end, body } => {
@@ -394,7 +496,14 @@ impl MurlocRuntime {
                     self.env.with_locked_vars(|env| {
                         env.insert(variable.to_string(), Value::Number(i));
                     });
-                    self.exec_block_impl(body).await?;
+                    
+                    if let Err(e) = self.exec_block_impl(body).await {
+                        match &e {
+                            ParseError::RuntimeError(RuntimeError::Break) => break,
+                            ParseError::RuntimeError(RuntimeError::Continue) => continue,
+                            _ => return Err(e),
+                        }
+                    }
                 }
                 Ok(())
             },
@@ -414,7 +523,17 @@ impl MurlocRuntime {
                         break;
                     }
 
-                    self.exec_block_impl(body).await?;
+                    if let Err(e) = self.exec_block_impl(body).await {
+                        match &e {
+                            ParseError::RuntimeError(RuntimeError::Break) => break,
+                            ParseError::RuntimeError(RuntimeError::Continue) => {
+                                let incr_result = self.env.evaluate(increment_expr)?;
+                                self.env.set_var(increment_var.to_string(), incr_result);
+                                continue;
+                            },
+                            _ => return Err(e),
+                        }
+                    }
 
                     let incr_result = self.env.evaluate(increment_expr)?;
                     self.env.set_var(increment_var.to_string(), incr_result);
@@ -428,7 +547,14 @@ impl MurlocRuntime {
                     Value::Array(elements) => {
                         for element in elements {
                             self.env.set_var(iterator_var.clone(), element.clone());
-                            self.exec_block_impl(body).await?;
+                            
+                            if let Err(e) = self.exec_block_impl(body).await {
+                                match &e {
+                                    ParseError::RuntimeError(RuntimeError::Break) => break,
+                                    ParseError::RuntimeError(RuntimeError::Continue) => continue,
+                                    _ => return Err(e),
+                                }
+                            }
                         }
                         Ok(())
                     },
@@ -436,7 +562,15 @@ impl MurlocRuntime {
                 }
             },
             Statement::LoopBlock { body } => {
-                self.exec_block_impl(body).await?;
+                loop {
+                    if let Err(e) = self.exec_block_impl(body).await {
+                        match &e {
+                            ParseError::RuntimeError(RuntimeError::Break) => break,
+                            ParseError::RuntimeError(RuntimeError::Continue) => continue,
+                            _ => return Err(e),
+                        }
+                    }
+                }
                 Ok(())
             },
             Statement::SwitchStatement { value, cases, default } => {
@@ -459,10 +593,10 @@ impl MurlocRuntime {
                 Ok(())
             },
             Statement::Break => {
-                Ok(())
+                return Err(RuntimeError::Break.into());
             },
             Statement::Continue => {
-                Ok(())
+                return Err(RuntimeError::Continue.into());
             },
             Statement::Sync { name } => {
                 let mut threads = self.async_manager.threads.lock()
@@ -484,11 +618,9 @@ impl MurlocRuntime {
     }
 
     pub fn call_function_expr(&self, name: &str, args: Vec<Value>) -> RuntimeResult<Value> {
-        println!("[DEBUG] Iniciando call_function_expr para '{}'", name);
         match self.env.execute_sync_function(name, args.clone()) {
             Ok(result) => return Ok(result),
-            Err(e) => {
-                println!("[DEBUG] Erro ao executar função assíncrona: {:?}", e);
+            Err(_e) => {
                 let (param_names, body) = self.env.get_function(name)?;
 
                 let mut call_vars = self.env.variables.lock()
@@ -522,6 +654,7 @@ impl MurlocRuntime {
                     variables: Arc::new(Mutex::new(call_vars)),
                     functions: self.env.functions.clone(),
                     structs: self.env.structs.clone(),
+                    exports: Arc::new(Mutex::new(HashMap::new())),
                 };
                 
                 let vars_arc = function_env.variables.clone();
@@ -563,7 +696,7 @@ impl MurlocRuntime {
         }
     }
 
-    async fn call_function_impl(&self, name: &str, local_vars: HashMap<String, Value>, body: &[Statement]) -> RuntimeResult<()> 
+    async fn call_function_impl(&self, _name: &str, local_vars: HashMap<String, Value>, body: &[Statement]) -> RuntimeResult<()> 
     where
         Self: Send + Sync,
     {
@@ -586,7 +719,6 @@ impl MurlocRuntime {
         
         if let Some(ret) = retorno {
             vars.insert("return".to_string(), ret.clone());
-            println!("[INFO] Function '{}' returned {:?}", name, ret);
         }
         
         match result {
@@ -602,6 +734,7 @@ impl MurlocRuntime {
                 variables: Arc::new(Mutex::new(vars_copy)),
                 functions: Arc::new(Mutex::new(funcs_copy)),
                 structs: Arc::new(Mutex::new(structs_copy)),
+                exports: Arc::new(Mutex::new(HashMap::new())),
             },
             async_manager: AsyncManager::new(),
             recursion_depth: self.recursion_depth.clone(),
@@ -631,7 +764,6 @@ impl MurlocRuntime {
             return Ok(());
         }
         
-        info!("Waiting for {} threads", handles.len());
         let runtime_clone = self.runtime.clone();
         
         let result = std::thread::spawn(move || {
@@ -640,7 +772,7 @@ impl MurlocRuntime {
                     match handle.await {
                         Ok(result) => {
                             match result {
-                                Ok(_) => info!("Thread completed successfully"),
+                                Ok(_) => (),
                                 Err(e) => error!("Thread completed with error: {:?}", e)
                             }
                         },
@@ -655,7 +787,6 @@ impl MurlocRuntime {
         }).join()
         .map_err(|e| RuntimeError::InvalidOperation(format!("Failed to join thread: {:?}", e)))?;
         
-        info!("All threads completed");
         result
     }
 

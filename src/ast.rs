@@ -12,6 +12,7 @@ pub enum Statement {
     IfStatement {
         condition: Expression,
         body: Vec<Statement>,
+        else_branch: Option<Box<Statement>>,
     },
     ForLoop {
         init_var: String,
@@ -59,7 +60,14 @@ pub enum Statement {
         name: String,
         args: Vec<Expression>,
     },
-    Import(String),
+    Import {
+        path: String,
+        imports: Vec<ImportSpecifier>,
+    },
+    Export {
+        name: String,
+        is_default: bool,
+    },
     ArrayDeclaration {
         name: String,
         elements: Vec<Value>,
@@ -321,7 +329,7 @@ impl Expression {
                     Err(ParseError::InvalidValue(format!("Struct '{}' not found in the cosmic void", name)))
                 }
             },
-            Expression::FunctionCall { name, args } => {
+            Expression::FunctionCall { name, args: _ } => {
                 let function_name = name.clone();
                 Err(ParseError::InvalidValue(format!(
                     "Function call '{}' cannot be evaluated directly in this context of the ritual",
@@ -388,11 +396,11 @@ impl PartialEq for Value {
 }
 
 impl Statement {
-    pub fn eval(&self, env: &HashMap<String, Value>) -> Result<Value, ParseError> {
+    pub fn eval(&self, _env: &HashMap<String, Value>) -> Result<Value, ParseError> {
         match self {
-            Statement::CallFunction { name, args } => {
+            Statement::CallFunction { name, args: _ } => {
                 Err(ParseError::InvalidValue(format!(
-                    "Chamada de função '{}' não pode ser avaliada diretamente neste contexto",
+                    "Function call '{}' cannot be evaluated directly in this context of the ritual",
                     name
                 )))
             },
@@ -478,4 +486,12 @@ pub enum LogicalOperator {
     And,
     Or,
     Not,
+}
+
+#[derive(Debug, Clone)]
+pub enum ImportSpecifier {
+    Default(String),           // import x from 'y'
+    Named(String, String),     // import { x as y } from 'z'
+    Namespace(String),         // import * as x from 'y'
+    Specific(String),          // import { x } from 'y'
 }

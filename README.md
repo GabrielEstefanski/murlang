@@ -44,17 +44,15 @@ mrgl
     glglrr name + " is a young murloc!"
 grl
 
-// While loop that decrements age until it reaches 40
 gglrbl (age > 40)
 mrgl
     glglrr "Countdown: " + age
     age = age - 1
 grl
 
-// Function call
 grrrblbl greet(name)
 
-// Struct instance
+
 grrr murloc_chief = Murloc { nome: "Grrmrgl", nivel: 10, vida: 100 }
 ```
 
@@ -179,10 +177,6 @@ MRGLGLGLGL! We welcome contributions! Here's how you can help:
 - Follow Rust's standard formatting: `cargo fmt`
 - Run clippy: `cargo clippy`
 - Maintain the Murloc theme in error messages and documentation
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

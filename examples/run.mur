@@ -1,6 +1,13 @@
+// 🐟 Function modifying struct
+grrrfnrrg heal(murloc)
+mrgl
+    murloc.health = murloc.health + 50
+    grrrtn murloc
+grl
+
 // 🐟 Variables
 grrr name = "Mrglglgl"
-grrr age = 42
+grrr age = 30
 
 // 🐟 Function with parameter and return
 grrrfnrrg greeting(name)
@@ -19,13 +26,13 @@ grl
 // 🐟 Array and for-loop
 grrip clan ["Mrggl", "Brgl", "Trgl"]
 
-mrrg member mrglin clan
+mrrg member blgr clan
 mrgl
     glglrr "Murloc in clan: " + member
 grl
 
 // 🐟 If/Else condition
-grlbrr (age > 30)
+grlbrr (age == 29)
 mrgl
     glglrr name + " is a wise murloc!"
 grl
@@ -35,18 +42,18 @@ mrgl
 grl
 
 // 🐟 While loop with break
-gglrbl (age > 40)
+gglrbl (age > 1)
 mrgl
     glglrr "Countdown: " + age
     age = age - 1
 
     grlbrr age < 40
     mrgl
-        blgrrstop
+        flurg
     grl
 grl
 
-// 🐟 Function call
+// 🐟 Function grrrblbl
 grrrblbl greeting(name)
 
 // 🐟 Struct instance
@@ -62,7 +69,7 @@ mrgl
     grrrtn experience
 grl
 
-grrrblbl calculate_experience(2)
+grrr xp = grrrblbl calculate_experience(2)
 glglrr "Chief XP: " + xp
 
 // 🐟 Switch (murrrgh)
@@ -80,48 +87,60 @@ mrgl
         glglrr "Unknown Murloc type."
 grl
 
-// 🐟 Function modifying struct
-grrrfnrrg heal(murloc)
-mrgl
-    murloc.health = murloc.health + 50
-    grrrtn murloc
-grl
-
-grrr healed_chief = grrrblbl heal(chief_murloc)
-glglrr "Healed Murloc: " + healed_chief.name + ", HP: " + healed_chief.health
-
 // 🐟 Async/Await
-mrglasync grrrfnrrg fetch_treasure()
+argl grrrfnrrg fetch_treasure()
 mrgl
     glglrr "Searching for treasure..."
     grrrtn "Golden Fish!"
 grl
 
-grrr treasure = fetch_treasure()
+grrr treasure = grrrblbl fetch_treasure()
 glglrr "Treasure found: " + treasure
 
 // 🐟 Try/Catch
-mrglswim
+mrglgl
 mrgl
     glglrr "Trying dangerous operation..."
-    grrr result = risky_function()   // This should trigger error if not defined
-    glglrr "Success: " + result
 grl
-mrglcatch
+mrrfg
 mrgl
     glglrr "MRGL ERROR: "
 grl
 
 // 🐟 Threading
-splurg
+splurg thread1
 mrgl
     glglrr "Running on a separate thread..."
     grrr counter = 0
-    gglrbl (counter < 3)
+    mrrg counter = 0; counter <= 64; counter = counter + 1
     mrgl
         glglrr "Thread counter: " + counter
-        counter = counter + 1
+    grl
+grl
+
+mrgurl thread1
+
+splurg t
+  mrgl
+    argl grrrfnrrg is_prime(n)
+    mrgl
+        grlbrr n <= 1
+        mrgl
+            grrrtn 0
+        grl
+        
+        grrr i = 2
+        gglrbl (i * i <= n)
+        mrgl
+            grlbrr n % i == 0
+            mrgl
+                grrrtn 0
+            grl
+            i = i + 1
+        grl
+        grrrtn 1
     grl
 grl
 
 glglrr "Program finished!"
+

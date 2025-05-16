@@ -1,5 +1,7 @@
 @echo off
-echo Mrglglglgl! Installing Murlang!
+chcp 65001 > nul
+type "%~dp0banner.txt"           
+echo.
 
 if not exist "%~dp0..\bin" mkdir "%~dp0..\bin"
 
@@ -30,9 +32,17 @@ echo     exit /b %%ERRORLEVEL%%
 echo ^)
 echo.
 echo if "%%1"=="help" (
-echo     echo Mrglglglgl! Commands available:
-echo     echo   mrgl run ^<file.mur^>    - Runs a Murlang program
-echo     echo   mrgl help             - Shows this help
+echo     "%%MURLANG_HOME%%\bin\murlang.exe" help
+echo     exit /b 0
+echo ^)
+echo.
+echo if "%%1"=="--version" (
+echo     "%%MURLANG_HOME%%\bin\murlang.exe" --version
+echo     exit /b 0
+echo ^)
+echo.
+echo if "%%1"=="-V" (
+echo     "%%MURLANG_HOME%%\bin\murlang.exe" --version
 echo     exit /b 0
 echo ^)
 echo.
@@ -46,6 +56,11 @@ setx MURLANG_HOME "%~dp0.." /M
 setx PATH "%BIN_PATH%;%PATH%" /M
 
 set "PATH=%BIN_PATH%;%PATH%"
+
+reg add "HKCR\.mur" /ve /d "MurlangFile" /f
+reg add "HKCR\MurlangFile" /ve /d "Murlang File" /f
+reg add "HKCR\MurlangFile\DefaultIcon" /ve /d "%~dp0..\murlang.ico" /f
+reg add "HKCR\MurlangFile\shell\open\command" /ve /d "\"%~dp0..\bin\murlang.exe\" \"%%1\"" /f
 
 echo.
 echo Mglrmglmglmgl! Installation completed!

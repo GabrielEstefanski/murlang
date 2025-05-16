@@ -1,8 +1,7 @@
 use crate::lexer::Token;
-use crate::ast::{Statement, Value};
+use crate::ast::{Statement, Value, Expression, ImportSpecifier};
 use crate::expression_parser::parse_expression;
 use crate::value_parser::{parse_value, parse_type, ParseError};
-use crate::Expression;
 
 fn expect_identifier(tokens: &[Token], index: &mut usize) -> Result<String, ParseError> {
     match tokens.get(*index) {
@@ -55,57 +54,57 @@ fn expect_keyword(tokens: &[Token], index: &mut usize, keyword: &str) -> Result<
 }
 
 fn parse_function_args(tokens: &[Token], index: &mut usize) -> Result<Vec<Expression>, ParseError> {
-                        let mut args = Vec::new();
-                        
+    let mut args = Vec::new();
+    
     expect_token_type(tokens, index, "LeftParen")?;
     
     while *index < tokens.len() {
         if matches!(&tokens[*index], Token::RightParen) {
             *index += 1;
-                                break;
-                            }
-                            
+            break;
+        }
+        
         match &tokens[*index] {
             Token::Identifier(var_name) => {
-                                    args.push(Expression::Variable(var_name.clone()));
+                args.push(Expression::Variable(var_name.clone()));
                 *index += 1;
-                                },
+            },
             Token::Number(num) => {
-                                    if let Ok(n) = num.parse::<i32>() {
-                                        args.push(Expression::Literal(Value::Number(n)));
-                                    } else if let Ok(n) = num.parse::<i64>() {
-                                        args.push(Expression::Literal(Value::NumberI64(n)));
-                                    } else if let Ok(n) = num.parse::<num_bigint::BigInt>() {
-                                        args.push(Expression::Literal(Value::NumberBig(n)));
-                                    } else {
-                                        return Err(ParseError::InvalidValue(format!("Invalid number: {}", num)));
-                                    }
+                if let Ok(n) = num.parse::<i32>() {
+                    args.push(Expression::Literal(Value::Number(n)));
+                } else if let Ok(n) = num.parse::<i64>() {
+                    args.push(Expression::Literal(Value::NumberI64(n)));
+                } else if let Ok(n) = num.parse::<num_bigint::BigInt>() {
+                    args.push(Expression::Literal(Value::NumberBig(n)));
+                } else {
+                    return Err(ParseError::InvalidValue(format!("Invalid number: {}", num)));
+                }
                 *index += 1;
-                                },
+            },
             Token::StringLiteral(text) => {
-                                    args.push(Expression::Literal(Value::Text(text.clone())));
+                args.push(Expression::Literal(Value::Text(text.clone())));
                 *index += 1;
-                                },
+            },
             Token::Comma => {
                 *index += 1;
-                                },
+            },
             Token::Minus => {
                 *index += 1;
                 if *index < tokens.len() {
                     if let Token::Number(num) = &tokens[*index] {
-                                        if let Ok(n) = num.parse::<i32>() {
-                                            args.push(Expression::Literal(Value::Number(-n)));
-                                        } else if let Ok(n) = num.parse::<i64>() {
-                                            args.push(Expression::Literal(Value::NumberI64(-n)));
-                                        } else {
-                                            return Err(ParseError::InvalidValue(format!("Invalid number: -{}", num)));
-                                        }
+                        if let Ok(n) = num.parse::<i32>() {
+                            args.push(Expression::Literal(Value::Number(-n)));
+                        } else if let Ok(n) = num.parse::<i64>() {
+                            args.push(Expression::Literal(Value::NumberI64(-n)));
+                        } else {
+                            return Err(ParseError::InvalidValue(format!("Invalid number: -{}", num)));
+                        }
                         *index += 1;
-                                    } else {
-                                        return Err(ParseError::UnexpectedToken("Expected number after minus sign".to_string()));
-                                    }
+                    } else {
+                        return Err(ParseError::UnexpectedToken("Expected number after minus sign".to_string()));
+                    }
                 }
-                                },
+            },
             tok => {
                 return Err(ParseError::UnexpectedToken(format!("Unexpected token in function arguments: {:?}", tok)));
             },
@@ -139,8 +138,8 @@ fn parse_function_parameters(tokens: &[Token], index: &mut usize) -> Result<Vec<
             }
             tok => {
                 return Err(ParseError::UnexpectedToken(format!("Unexpected token in function parameters: {:?}", tok)));
-                            }
-                        }
+            }
+        }
     }
     
     Ok(params)
@@ -235,7 +234,36 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 let body = parse_block(&tokens, &mut i, Some(&scope_stack))?;
                 expect_keyword(&tokens, &mut i, "end")?;
 
-                stmts.push(Statement::IfStatement { condition, body });
+                let mut else_branch = None;
+
+                if let Some(Token::Keyword(kw)) = tokens.get(i) {
+                    if kw == "else" {
+                        i += 1;
+            
+                        if let Some(Token::Keyword(kw)) = tokens.get(i) {
+                            if kw == "if" {
+                                let else_if_stmt = parse_if_statement(&tokens, &mut i, &scope_stack)?;
+                                else_branch = Some(Box::new(else_if_stmt));
+                            } else {
+                                expect_keyword(&tokens, &mut i, "begin")?;
+                                let else_body = parse_block(&tokens, &mut i, Some(&scope_stack))?;
+                                expect_keyword(&tokens, &mut i, "end")?;
+            
+                                else_branch = Some(Box::new(Statement::IfStatement {
+                                    condition: Expression::Literal(Value::Number(1)),
+                                    body: else_body,
+                                    else_branch: None
+                                }));
+                            }
+                        }
+                    }
+                }
+
+                stmts.push(Statement::IfStatement {
+                    condition,
+                    body,
+                    else_branch
+                });
             }
 
             Token::Keyword(kw) if kw == "for" => {
@@ -453,13 +481,13 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 i += 1;
                 let stmt = parse_function_or_async_function(&tokens, &mut i, false, &mut scope_stack)?;
                 stmts.push(stmt);
-                }
+            }
 
             Token::Keyword(kw) if kw == "async" => {
-                            i += 1;
+                i += 1;
                 
                 if matches!(tokens.get(i), Some(Token::Keyword(kw)) if kw == "fn") {
-                i += 1;
+                    i += 1;
                 }
                 
                 let stmt = parse_function_or_async_function(&tokens, &mut i, true, &mut scope_stack)?;
@@ -491,6 +519,104 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 i = expr_index;
                 
                 stmts.push(Statement::Return(expr));
+            }
+
+            Token::Keyword(kw) if kw == "import" => {
+                i += 1;
+                let mut imports = Vec::new();
+                
+                if let Some(Token::Identifier(name)) = tokens.get(i) {
+                    i += 1;
+                    expect_keyword(&tokens, &mut i, "from")?;
+                    if let Some(Token::StringLiteral(path)) = tokens.get(i) {
+                        i += 1;
+                        imports.push(ImportSpecifier::Default(name.clone()));
+                        stmts.push(Statement::Import {
+                            path: path.clone(),
+                            imports,
+                        });
+                    } else {
+                        return Err(ParseError::UnexpectedToken("Expected string literal after 'from'".to_string()));
+                    }
+                } else if let Some(Token::LeftBrace) = tokens.get(i) {
+                    i += 1;
+                    while i < tokens.len() {
+                        if let Some(Token::RightBrace) = tokens.get(i) {
+                            i += 1;
+                            break;
+                        }
+                        
+                        let specifier = parse_import_specifier(&tokens, &mut i)?;
+                        imports.push(specifier);
+                        
+                        if let Some(Token::Comma) = tokens.get(i) {
+                            i += 1;
+                        } else if let Some(Token::RightBrace) = tokens.get(i) {
+                            i += 1;
+                            break;
+                        } else {
+                            return Err(ParseError::UnexpectedToken("Expected ',' or '}' in import specifiers".to_string()));
+                        }
+                    }
+                    
+                    expect_keyword(&tokens, &mut i, "from")?;
+                    if let Some(Token::StringLiteral(path)) = tokens.get(i) {
+                        i += 1;
+                        stmts.push(Statement::Import {
+                            path: path.clone(),
+                            imports,
+                        });
+                    } else {
+                        return Err(ParseError::UnexpectedToken("Expected string literal after 'from'".to_string()));
+                    }
+                } else {
+                    return Err(ParseError::UnexpectedToken("Invalid import statement".to_string()));
+                }
+            }
+
+            Token::Keyword(kw) if kw == "export" => {
+                i += 1;
+                let is_default = if let Some(Token::Keyword(kw)) = tokens.get(i) {
+                    if kw == "default" {
+                        i += 1;
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if let Some(Token::Identifier(name)) = tokens.get(i) {
+                    i += 1;
+                    stmts.push(Statement::Export {
+                        name: name.clone(),
+                        is_default,
+                    });
+                } else {
+                    return Err(ParseError::UnexpectedToken("Expected identifier after 'export'".to_string()));
+                }
+            }
+
+            Token::Keyword(kw) if kw == "while" => {
+                i += 1;
+                let condition = parse_expression(&tokens, &mut i)?;
+                
+                expect_keyword(&tokens, &mut i, "begin")?;
+                let body = parse_block(&tokens, &mut i, Some(&scope_stack))?;
+                expect_keyword(&tokens, &mut i, "end")?;
+
+                stmts.push(Statement::WhileLoop { condition, body });
+            }
+
+            Token::Keyword(kw) if kw == "break" => {
+                i += 1;
+                stmts.push(Statement::Break);
+            }
+
+            Token::Keyword(kw) if kw == "continue" => {
+                i += 1;
+                stmts.push(Statement::Continue);
             }
 
             _ => {
@@ -531,10 +657,10 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                 expect_token_type(&tokens, &mut inner_index, "Equals")?;
                 
                 if inner_index < tokens.len() && matches!(&tokens[inner_index], Token::Keyword(kw) if kw == "async") {
-                inner_index += 1;
-                
+                    inner_index += 1;
+                    
                     if inner_index < tokens.len() && matches!(&tokens[inner_index], Token::Keyword(kw) if kw == "call") {
-                inner_index += 1;
+                        inner_index += 1;
                         let func_name = expect_identifier(&tokens, &mut inner_index)?;
                         let args = parse_function_args(&tokens, &mut inner_index)?;
                         
@@ -597,12 +723,45 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                 let mut expr_index = inner_index;
                 let condition = parse_expression(tokens, &mut expr_index)?;
                 inner_index = expr_index;
-                
-                expect_keyword(&tokens, &mut inner_index, "begin")?;
+
+                expect_keyword(tokens, &mut inner_index, "begin")?;
                 let if_body = parse_block(tokens, &mut inner_index, None)?;
-                expect_keyword(&tokens, &mut inner_index, "end")?;
+                expect_keyword(tokens, &mut inner_index, "end")?;
+
+                let mut else_branch = None;
+
+                if let Some(Token::Keyword(kw)) = tokens.get(inner_index) {
+                    if kw == "else" {
+                        inner_index += 1;
                 
-                statements.push(Statement::IfStatement { condition, body: if_body });
+                        if let Some(Token::Keyword(next_kw)) = tokens.get(inner_index) {
+                            if next_kw == "if" {
+                                let else_if_stmt = parse_if_statement(tokens, &mut inner_index, &vec![])?;
+                                else_branch = Some(Box::new(else_if_stmt));
+                            } else if next_kw == "begin" {
+                                inner_index += 1;
+                                let else_body = parse_block(tokens, &mut inner_index, None)?;
+                                expect_keyword(tokens, &mut inner_index, "end")?;
+                
+                                else_branch = Some(Box::new(Statement::IfStatement {
+                                    condition: Expression::Literal(Value::Number(1)),
+                                    body: else_body,
+                                    else_branch: None
+                                }));
+                            } else {
+                                return Err(ParseError::UnexpectedToken(
+                                    format!("Esperado 'if' ou 'begin' após 'else', encontrado {:?}", tokens.get(inner_index))
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                statements.push(Statement::IfStatement {
+                    condition,
+                    body: if_body,
+                    else_branch,
+                });
             }
             Token::Keyword(kw) if kw == "for" => {
                 inner_index += 1;
@@ -753,16 +912,118 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                 }
                 
                 statements.push(Statement::Wait { thread_names });
-            }
+            },
+            Token::Keyword(kw) if kw == "while" => {
+                inner_index += 1;
+                
+                let mut expr_index = inner_index;
+                let condition = parse_expression(tokens, &mut expr_index)?;
+                inner_index = expr_index;
+                
+                expect_keyword(&tokens, &mut inner_index, "begin")?;
+                let while_body = parse_block(tokens, &mut inner_index, None)?;
+                expect_keyword(&tokens, &mut inner_index, "end")?;
+                
+                statements.push(Statement::WhileLoop { condition, body: while_body });
+            },
             Token::Keyword(kw) if kw == "fn" => {
                 inner_index += 1;
                 let stmt = parse_function_or_async_function(&tokens, &mut inner_index, false, &mut scope_stack)?;
                 statements.push(stmt);
-            }
+            },
+            Token::Keyword(kw) if kw == "break" => {
+                inner_index += 1;
+                statements.push(Statement::Break);
+            },
+            Token::Keyword(kw) if kw == "continue" => {
+                inner_index += 1;
+                statements.push(Statement::Continue);
+            },
             _ => inner_index += 1,
         }
     }
     
     *start_index = inner_index;
     Ok(statements)
+}
+
+fn parse_import_specifier(tokens: &[Token], index: &mut usize) -> Result<ImportSpecifier, ParseError> {
+    match tokens.get(*index) {
+        Some(Token::Identifier(name)) => {
+            *index += 1;
+            
+            if let Some(Token::Keyword(kw)) = tokens.get(*index) {
+                if kw == "as" {
+                    *index += 1;
+                    if let Some(Token::Identifier(alias)) = tokens.get(*index) {
+                        *index += 1;
+                        return Ok(ImportSpecifier::Named(name.clone(), alias.clone()));
+                    }
+                }
+            }
+            
+            Ok(ImportSpecifier::Specific(name.clone()))
+        },
+        Some(Token::Keyword(kw)) if kw == "*" => {
+            *index += 1;
+            expect_keyword(tokens, index, "as")?;
+            if let Some(Token::Identifier(name)) = tokens.get(*index) {
+                *index += 1;
+                Ok(ImportSpecifier::Namespace(name.clone()))
+            } else {
+                Err(ParseError::UnexpectedToken("Expected identifier after 'as'".to_string()))
+            }
+        },
+        _ => Err(ParseError::UnexpectedToken("Invalid import specifier".to_string()))
+    }
+}
+
+fn parse_if_statement(
+    tokens: &[Token],
+    i: &mut usize,
+    scope_stack: &Vec<String>,
+) -> Result<Statement, ParseError> {
+    *i += 1;
+
+    let condition = parse_expression(tokens, i)?;
+    expect_keyword(tokens, i, "begin")?;
+    let body = parse_block(tokens, i, Some(scope_stack))?;
+    expect_keyword(tokens, i, "end")?;
+
+    let mut else_branch = None;
+
+    if let Some(Token::Keyword(kw)) = tokens.get(*i) {
+        if kw == "else" {
+            *i += 1;
+    
+            match tokens.get(*i) {
+                Some(Token::Keyword(next_kw)) if next_kw == "if" => {
+                    let else_if_stmt = parse_if_statement(tokens, i, scope_stack)?;
+                    else_branch = Some(Box::new(else_if_stmt));
+                }
+                Some(Token::Keyword(next_kw)) if next_kw == "begin" => {
+                    *i += 1;
+                    let else_body = parse_block(tokens, i, Some(scope_stack))?;
+                    expect_keyword(tokens, i, "end")?;
+                                else_branch = Some(Box::new(Statement::IfStatement {
+                                    condition: Expression::Literal(Value::Number(1)),
+                                    body: else_body,
+                                    else_branch: None
+                                }));
+                }
+                _ => {
+                    return Err(ParseError::UnexpectedToken(
+                        format!("Esperado 'if' ou 'begin' após 'else', encontrado {:?}", tokens.get(*i))
+                    ));
+                }
+            }
+        }
+    }
+    
+
+    Ok(Statement::IfStatement {
+        condition,
+        body,
+        else_branch,
+    })
 }
