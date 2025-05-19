@@ -13,14 +13,12 @@ pub struct Environment {
 
 impl Environment {
     pub fn new() -> Self {
-        let env = Self {
+        Self {
             variables: Arc::new(Mutex::new(HashMap::new())),
             functions: Arc::new(Mutex::new(HashMap::new())),
             structs: Arc::new(Mutex::new(HashMap::new())),
             exports: Arc::new(Mutex::new(HashMap::new())),
-        };
-
-        env
+        }
     }
 
     pub fn get_var(&self, name: &str) -> RuntimeResult<Value> {

@@ -592,6 +592,21 @@ impl MurlocRuntime {
                 }
                 Ok(())
             },
+            Statement::TryBlock { try_block, catch_param, catch_body } => {
+                let try_result = self.exec_block_impl(try_block).await;
+            
+                match try_result {
+                    Ok(_) => Ok(()),
+                    Err(err) => {
+                        if let Some(var_name) = catch_param {
+                            let error_value = Value::Text(err.to_string());
+                            self.env.set_var(var_name.to_string(), error_value);
+                        }
+                    
+                        self.exec_block_impl(catch_body).await
+                    }
+                }
+            },            
             Statement::Break => {
                 return Err(RuntimeError::Break.into());
             },

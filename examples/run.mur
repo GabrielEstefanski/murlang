@@ -32,7 +32,7 @@ mrgl
 grl
 
 // 🐟 If/Else condition
-grlbrr (age == 29)
+grlbrr (age >= 60)
 mrgl
     glglrr name + " is a wise murloc!"
 grl
@@ -73,17 +73,17 @@ grrr xp = grrrblbl calculate_experience(2)
 glglrr "Chief XP: " + xp
 
 // 🐟 Switch (murrrgh)
-grrr murloc_type = "Deep"
+grrr murloc_type = "sdffsdf"
 
 murrrgh murloc_type
 mrgl
-    case "Coastal":
+    grlblgl "Coastal":
         glglrr "Lives near the shore."
-    case "Deep":
+    grlblgl "Deep":
         glglrr "Dwells in dark waters."
-    case "Warrior":
+    grlblgl "Warrior":
         glglrr "Fights with claws and rage!"
-    default:
+    blrrghlt:
         glglrr "Unknown Murloc type."
 grl
 
@@ -100,11 +100,12 @@ glglrr "Treasure found: " + treasure
 // 🐟 Try/Catch
 mrglgl
 mrgl
-    glglrr "Trying dangerous operation..."
+    grrr x = 10 / 0
+    glglrr x
 grl
-mrrfg
+mrglurp (err)
 mrgl
-    glglrr "MRGL ERROR: "
+    glglrr "MRGL ERROR: " + err
 grl
 
 // 🐟 Threading
@@ -119,28 +120,6 @@ mrgl
 grl
 
 mrgurl thread1
-
-splurg t
-  mrgl
-    argl grrrfnrrg is_prime(n)
-    mrgl
-        grlbrr n <= 1
-        mrgl
-            grrrtn 0
-        grl
-        
-        grrr i = 2
-        gglrbl (i * i <= n)
-        mrgl
-            grlbrr n % i == 0
-            mrgl
-                grrrtn 0
-            grl
-            i = i + 1
-        grl
-        grrrtn 1
-    grl
-grl
 
 glglrr "Program finished!"
 

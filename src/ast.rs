@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::Arc};
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use crate::ParseError;
@@ -108,9 +108,10 @@ pub enum Statement {
         body: Vec<Statement>,
         alternatives: Vec<(Expression, Vec<Statement>)>,
     },
-    CatchBlock {
+    TryBlock {
         try_block: Vec<Statement>,
-        catch_blocks: Vec<(String, Vec<Statement>)>,
+        catch_param: Option<String>,
+        catch_body: Vec<(Statement)>,
     },
 }
 
@@ -143,6 +144,7 @@ pub enum Value {
     Struct(String, Vec<(String, Value)>),
     Future(Box<Statement>),
     Thread(String),
+    Error(Arc<String>),
 }
 
 impl fmt::Display for Value {
@@ -175,6 +177,7 @@ impl fmt::Display for Value {
             },
             Value::Future(_) => write!(f, "<future>"),
             Value::Thread(name) => write!(f, "<thread:{}>", name),
+            Value::Error(err) => write!(f, "<error: {}>", err),
         }
     }
 }

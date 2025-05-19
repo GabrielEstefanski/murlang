@@ -71,12 +71,14 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("mrgurl", "wait"),
     ("fshpool", "threadpool"),
     ("mrglgl", "try"),
-    ("mrglcatch", "catch"),
+    ("mrglurp", "catch"),
     ("blrrgl", "else"),
     ("grrrtn", "return"),
     ("blbtxt", "text"),
     ("numblrr", "number"),
     ("blgr", "in"),
+    ("grlblgl", "case"),
+    ("blrrghlt", "default"),
 ];
 
 pub struct Lexer<'a> {
@@ -100,12 +102,12 @@ impl<'a> Lexer<'a> {
         while let Some(c) = self.chars.next() {
             match c {
                 ' ' | '\t' => self.column += 1,
-                '\r' => {},
+                '\r' => {}
                 '\n' => {
                     self.line += 1;
                     self.column = 1;
                 }
-                 
+
                 '+' | '-' | '*' | '/' | '%' | '=' | '<' | '>' | '!' | '&' | '|' => {
                     if let Ok(token) = self.process_operator(c) {
                         if !(c == '/' && token.line == 0 && token.column == 0) {
@@ -115,29 +117,30 @@ impl<'a> Lexer<'a> {
                         return Err(e);
                     }
                 }
-                
+
                 '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | ';' | '.' => {
                     tokens.push(self.process_delimiter(c));
                 }
-                
-                '"' => {
-                    match self.process_string() {
-                        Ok(token) => tokens.push(token),
-                        Err(e) => return Err(e),
-                    }
-                }
-                
+
+                '"' => match self.process_string() {
+                    Ok(token) => tokens.push(token),
+                    Err(e) => return Err(e),
+                },
+
                 ch if ch.is_alphabetic() => {
                     tokens.push(self.process_identifier(ch));
                 }
-                
+
                 ch if ch.is_digit(10) => {
                     tokens.push(self.process_number(ch));
                 }
-                
+
                 _ => {
                     return Err(LexerError {
-                        message: format!("Invalid character: '{}' at line {} column {}", c, self.line, self.column),
+                        message: format!(
+                            "Invalid character: '{}' at line {} column {}",
+                            c, self.line, self.column
+                        ),
                         line: self.line,
                         column: self.column,
                     });
@@ -152,7 +155,7 @@ impl<'a> Lexer<'a> {
         let start_column = self.column;
         let mut ident = first_char.to_string();
         self.column += 1;
-        
+
         while let Some(&ch) = self.chars.peek() {
             if ch.is_alphanumeric() || ch == '_' {
                 ident.push(self.chars.next().unwrap());
@@ -161,7 +164,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        
+
         if let Some(&(_, name)) = KEYWORDS.iter().find(|&&(k, _)| k == ident) {
             SpannedToken {
                 token: Token::Keyword(name.to_string()),
@@ -181,7 +184,7 @@ impl<'a> Lexer<'a> {
         let start_column = self.column;
         let mut num = first_digit.to_string();
         self.column += 1;
-        
+
         while let Some(&ch) = self.chars.peek() {
             if ch.is_digit(10) || ch == '.' && !num.contains('.') {
                 num.push(self.chars.next().unwrap());
@@ -190,7 +193,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        
+
         SpannedToken {
             token: Token::Number(num),
             line: self.line,
@@ -206,7 +209,7 @@ impl<'a> Lexer<'a> {
 
         while let Some(ch) = self.chars.next() {
             self.column += 1;
-            
+
             if escaped {
                 match ch {
                     'n' => string.push('\n'),
@@ -225,15 +228,18 @@ impl<'a> Lexer<'a> {
                 string.push(ch);
             }
         }
-        
+
         if escaped {
             return Err(LexerError {
-                message: format!("Unterminated escape sequence in string at line {} column {}", self.line, start_column),
+                message: format!(
+                    "Unterminated escape sequence in string at line {} column {}",
+                    self.line, start_column
+                ),
                 line: self.line,
                 column: start_column,
             });
         }
-        
+
         Ok(SpannedToken {
             token: Token::StringLiteral(string),
             line: self.line,
@@ -244,7 +250,7 @@ impl<'a> Lexer<'a> {
     fn process_operator(&mut self, operator: char) -> Result<SpannedToken, LexerError> {
         let start_column = self.column;
         self.column += 1;
-        
+
         let token = match operator {
             '+' => Token::Plus,
             '-' => Token::Minus,
@@ -253,7 +259,7 @@ impl<'a> Lexer<'a> {
                 if self.chars.peek() == Some(&'/') {
                     self.chars.next();
                     self.column += 1;
-                    
+
                     while let Some(ch) = self.chars.next() {
                         if ch == '\n' {
                             break;
@@ -261,7 +267,7 @@ impl<'a> Lexer<'a> {
                             self.column += 1;
                         }
                     }
-                    
+
                     return Ok(SpannedToken {
                         token: Token::Divide,
                         line: 0,
@@ -270,7 +276,7 @@ impl<'a> Lexer<'a> {
                 } else if self.chars.peek() == Some(&'*') {
                     self.chars.next();
                     self.column += 1;
-                    
+
                     let mut nested_level = 1;
                     while nested_level > 0 {
                         match self.chars.next() {
@@ -282,7 +288,7 @@ impl<'a> Lexer<'a> {
                                 } else {
                                     self.column += 1;
                                 }
-                            },
+                            }
                             Some('/') => {
                                 if self.chars.peek() == Some(&'*') {
                                     self.chars.next();
@@ -291,24 +297,27 @@ impl<'a> Lexer<'a> {
                                 } else {
                                     self.column += 1;
                                 }
-                            },
+                            }
                             Some('\n') => {
                                 self.line += 1;
                                 self.column = 1;
-                            },
+                            }
                             Some(_) => {
                                 self.column += 1;
-                            },
+                            }
                             None => {
                                 return Err(LexerError {
-                                    message: format!("Block comment not closed at line {} column {}", self.line, start_column),
+                                    message: format!(
+                                        "Block comment not closed at line {} column {}",
+                                        self.line, start_column
+                                    ),
                                     line: self.line,
                                     column: start_column,
                                 });
                             }
                         }
                     }
-                    
+
                     return Ok(SpannedToken {
                         token: Token::Divide,
                         line: 0,
@@ -317,7 +326,7 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Divide
                 }
-            },
+            }
             '%' => Token::Modulo,
             '=' => {
                 if self.chars.peek() == Some(&'=') {
@@ -327,7 +336,7 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Assign
                 }
-            },
+            }
             '<' => {
                 if self.chars.peek() == Some(&'=') {
                     self.chars.next();
@@ -336,7 +345,7 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::LessThan
                 }
-            },
+            }
             '>' => {
                 if self.chars.peek() == Some(&'=') {
                     self.chars.next();
@@ -345,7 +354,7 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::GreaterThan
                 }
-            },
+            }
             '!' => {
                 if self.chars.peek() == Some(&'=') {
                     self.chars.next();
@@ -354,7 +363,7 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Not
                 }
-            },
+            }
             '&' => {
                 if self.chars.peek() == Some(&'&') {
                     self.chars.next();
@@ -362,12 +371,15 @@ impl<'a> Lexer<'a> {
                     Token::And
                 } else {
                     return Err(LexerError {
-                        message: format!("Invalid token: expected '&&', found single '&' at line {} column {}", self.line, start_column),
+                        message: format!(
+                            "Invalid token: expected '&&', found single '&' at line {} column {}",
+                            self.line, start_column
+                        ),
                         line: self.line,
                         column: start_column,
                     });
                 }
-            },
+            }
             '|' => {
                 if self.chars.peek() == Some(&'|') {
                     self.chars.next();
@@ -375,15 +387,18 @@ impl<'a> Lexer<'a> {
                     Token::Or
                 } else {
                     return Err(LexerError {
-                        message: format!("Invalid token: expected '||', found single '|' at line {} column {}", self.line, start_column),
+                        message: format!(
+                            "Invalid token: expected '||', found single '|' at line {} column {}",
+                            self.line, start_column
+                        ),
                         line: self.line,
                         column: start_column,
                     });
                 }
-            },
-            _ => unreachable!("Undefined operator")
+            }
+            _ => unreachable!("Undefined operator"),
         };
-        
+
         Ok(SpannedToken {
             token,
             line: self.line,
@@ -394,7 +409,7 @@ impl<'a> Lexer<'a> {
     fn process_delimiter(&mut self, delimiter: char) -> SpannedToken {
         let start_column = self.column;
         self.column += 1;
-        
+
         let token = match delimiter {
             '(' => Token::LeftParen,
             ')' => Token::RightParen,
@@ -406,9 +421,9 @@ impl<'a> Lexer<'a> {
             ':' => Token::Colon,
             ';' => Token::Semicolon,
             '.' => Token::Dot,
-            _ => unreachable!("Undefined delimiter")
+            _ => unreachable!("Undefined delimiter"),
         };
-        
+
         SpannedToken {
             token,
             line: self.line,

@@ -15,26 +15,26 @@ Murlang is an interpreted programming language with syntax based on "Murloc-spea
 
 ## Quick Start (Basic Syntax)
 
-```rust
-// Variable declaration
+```murlang
+// Declaração de variável
 grrr name = "Mrglglgl"
 grrr age = 42
 
-// Function definition
+// Definição de função
 grrrfnrrg greet(name)
 mrgl
     glglrr "Hello, " + name + "!"
 grl
 
-// Struct definition
+// Definição de struct
 rrkgr Murloc
 mrgl
-    name: blbtxt,    // text type
-    level: numblrr,  // number type
-    health: numblrr,   // number type
+    name: blbtxt,    // tipo texto
+    level: numblrr,  // tipo número
+    health: numblrr, // tipo número
 grl
 
-// Control structures
+// Estruturas de controle
 grlbrr (age > 30)    // if
 mrgl
     glglrr name + " is a wise murloc!"
@@ -44,7 +44,7 @@ mrgl
     glglrr name + " is a young murloc!"
 grl
 
-gglrbl (age > 40)
+gglrbl (age > 40)   // while
 mrgl
     glglrr "Countdown: " + age
     age = age - 1
@@ -52,8 +52,8 @@ grl
 
 grrrblbl greet(name)
 
-
-grrr murloc_chief = Murloc { nome: "Grrmrgl", nivel: 10, vida: 100 }
+// Instanciando struct
+grrr murloc_chief = Murloc { name: "Grrmrgl", level: 10, health: 100 }
 ```
 
 See [examples/run.mur](examples/run.mur) for a complete program.
@@ -66,16 +66,27 @@ See [examples/run.mur](examples/run.mur) for a complete program.
 |--------------|---------|---------|
 | `grrr` | Variable declaration | `grrr x = 10` |
 | `grlbrr` | If statement | `grlbrr (x > 0)` |
+| `blrrgl` | Else | `blrrgl` |
 | `grrrfnrrg` | Function definition | `grrrfnrrg sum(a, b)` |
 | `grrrblbl` | Function call | `grrrblbl sum(5, 3)` |
 | `mrgl` | Block start | `mrgl` |
 | `grl` | Block end | `grl` |
 | `glglrr` | Print | `glglrr "Hello"` |
 | `grrrtn` | Return | `grrrtn result` |
-| `splurg` | Spawn thread | `splurg { ... }` |
-| `mrglwait` | Wait for thread | `mrglwait [thread1, thread2]` |
-| `mrglasync` | Async function | `mrglasync fn task()` |
-| `mrglawait` | Await operation | `mrglawait future` |
+| `splurg` | Spawn thread | `splurg` |
+| `mrgurl` | Wait for thread | `mrgurl` |
+| `argl` | Async function| `argl grrrfnrrg task()` |
+| `mrgargl` | Await Operation | `mrgargl future` |
+| `rrkgr` | Struct | `rrkgr Person` |
+| `grrip` | Array | `grrip numbers = [1,2,3]` |
+| `gglrbl` | While loop | `gglrbl (cond)` |
+| `mrrg` | For loop | `mrrg (item in list)` |
+| `murrrgh` | Switch | `murrrgh (var)` |
+| `grlblgl` | Case | `grlblgl 1:` |
+| `blrrghlt` | Default | `blrrghlt:` |
+| `blgr` | In | `mrrg member blgr clan` |
+| `mrglgl` | Try | `mrglgl` |
+| `mrglurp` | Catch | `mrglurp` |
 
 ### Data Types
 
@@ -144,15 +155,20 @@ The executable will be generated in `target/release/mur_lang`.
 
 ```
 mur_lang/
+├── bin/                  # Executables or compiled binaries
+├── examples/             # Example programs
+├── scripts/              # Installation scripts
 ├── src/
-│   ├── lexer.rs      # Tokenization
-│   ├── parser.rs     # Syntax analysis
-│   ├── ast.rs        # Abstract Syntax Tree
-│   ├── interpreter/  # Runtime and execution
-│   └── main.rs       # Entry point
-├── scripts/          # Installation scripts
-├── examples/         # Example programs
-└── tests/           # Test suite
+│   ├── interpreter/      # Runtime and execution logic
+│   ├── ast.rs            # Abstract Syntax Tree definitions
+│   ├── expression_parser.rs  # Expression parser
+│   ├── lexer.rs          # Tokenization
+│   ├── lib.rs            # Main library entry (for `cargo build --lib`)
+│   ├── main.rs           # Binary entry point
+│   ├── mod.rs            # Root module for src
+│   ├── parser.rs         # Syntax parser
+│   └── value_parser.rs   # Parser for literals/values
+
 ```
 
 ## Contributing
@@ -177,6 +193,15 @@ MRGLGLGLGL! We welcome contributions! Here's how you can help:
 - Follow Rust's standard formatting: `cargo fmt`
 - Run clippy: `cargo clippy`
 - Maintain the Murloc theme in error messages and documentation
+
+## License
+
+Murlang is licensed under the MIT License. See the full license [here](LICENSE).
+
+## VSCode Extension
+
+The official Murlang VSCode extension is available on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=GabrielEstefanski.murlang).
+Enhance your development experience with syntax highlighting, snippets, and more!
 
 ## Acknowledgments
 

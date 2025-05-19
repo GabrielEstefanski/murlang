@@ -401,32 +401,42 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
                 
                 stmts.push(Statement::Wait { thread_names });
             }
-
-            Token::Keyword(kw) if kw == "catch" => {
+            Token::Keyword(kw) if kw == "try" => {
                 i += 1;
+            
                 expect_keyword(&tokens, &mut i, "begin")?;
                 let try_block = parse_block(&tokens, &mut i, None)?;
                 expect_keyword(&tokens, &mut i, "end")?;
-
-                let mut catch_blocks = Vec::new();
-                while matches!(tokens.get(i), Some(Token::Keyword(kw)) if kw == "begin") {
+            
+                expect_keyword(&tokens, &mut i, "catch")?;
+            
+                let catch_param = if matches!(tokens.get(i), Some(Token::LeftParen)) {
                     i += 1;
-                    let error_type = match tokens.get(i) {
-                        Some(Token::StringLiteral(msg)) => msg.clone(),
-                        _ => return Err(ParseError::UnexpectedToken("Expected error message after catch".to_string())),
+                    let param_name = match tokens.get(i) {
+                        Some(Token::Identifier(name)) => name.clone(),
+                        _ => return Err(ParseError::UnexpectedToken("Expected identifier as catch param".into())),
                     };
                     i += 1;
-
-                    expect_keyword(&tokens, &mut i, "begin")?;
-                    let catch_body = parse_block(&tokens, &mut i, None)?;
-                    expect_keyword(&tokens, &mut i, "end")?;
-
-                    catch_blocks.push((error_type, catch_body));
-                }
-
-                stmts.push(Statement::CatchBlock { try_block, catch_blocks });
+                    if matches!(tokens.get(i), Some(Token::RightParen)) {
+                        i += 1;
+                    } else {
+                        return Err(ParseError::UnexpectedToken("Expected ')' after catch param".into()));
+                    }
+                    Some(param_name)
+                } else {
+                    None
+                };
+            
+                expect_keyword(&tokens, &mut i, "begin")?;
+                let catch_body = parse_block(&tokens, &mut i, None)?;
+                expect_keyword(&tokens, &mut i, "end")?;
+            
+                stmts.push(Statement::TryBlock {
+                    try_block,
+                    catch_param,
+                    catch_body,
+                });
             }
-
             Token::Keyword(kw) if kw == "print" => {
                 i += 1;
                 let expr = parse_expression(&tokens, &mut i)?;
@@ -617,6 +627,48 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Statement>, ParseError> {
             Token::Keyword(kw) if kw == "continue" => {
                 i += 1;
                 stmts.push(Statement::Continue);
+            }
+
+            Token::Keyword(kw) if kw == "switch" => {
+                i += 1;
+                let value = parse_expression(&tokens, &mut i)?;
+                
+                expect_keyword(&tokens, &mut i, "begin")?;
+                
+                let mut cases = Vec::new();
+                let mut default = None;
+                
+                while i < tokens.len() {
+                    if let Token::Keyword(kw) = &tokens[i] {
+                        if kw == "end" {
+                            i += 1;
+                            break;
+                        } else if kw == "case" {
+                            i += 1;
+                            let case_value = parse_value(&tokens, &mut i)?;
+                            expect_token_type(&tokens, &mut i, "Colon")?;
+                            
+                            let case_body = parse_case_block(&tokens, &mut i)?;
+                            cases.push((case_value, case_body));
+                        } else if kw == "default" {
+                            i += 1;
+                            expect_token_type(&tokens, &mut i, "Colon")?;
+                            
+                            let default_body = parse_case_block(&tokens, &mut i)?;
+                            default = Some(default_body);
+                        } else {
+                            i += 1;
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+                
+                stmts.push(Statement::SwitchStatement {
+                    value,
+                    cases,
+                    default,
+                });
             }
 
             _ => {
@@ -939,6 +991,50 @@ pub fn parse_block(tokens: &[Token], start_index: &mut usize, current_scope: Opt
                 inner_index += 1;
                 statements.push(Statement::Continue);
             },
+            Token::Keyword(kw) if kw == "switch" => {
+                inner_index += 1;
+                
+                let mut expr_index = inner_index;
+                let value = parse_expression(tokens, &mut expr_index)?;
+                inner_index = expr_index;
+                
+                expect_keyword(&tokens, &mut inner_index, "begin")?;
+                
+                let mut cases = Vec::new();
+                let mut default = None;
+                
+                while inner_index < tokens.len() {
+                    if let Token::Keyword(kw) = &tokens[inner_index] {
+                        if kw == "end" {
+                            inner_index += 1;
+                            break;
+                        } else if kw == "case" {
+                            inner_index += 1;
+                            let case_value = parse_value(&tokens, &mut inner_index)?;
+                            expect_token_type(&tokens, &mut inner_index, "Colon")?;
+                            
+                            let case_body = parse_case_block(&tokens, &mut inner_index)?;
+                            cases.push((case_value, case_body));
+                        } else if kw == "default" {
+                            inner_index += 1;
+                            expect_token_type(&tokens, &mut inner_index, "Colon")?;
+                            
+                            let default_body = parse_case_block(&tokens, &mut inner_index)?;
+                            default = Some(default_body);
+                        } else {
+                            inner_index += 1;
+                        }
+                    } else {
+                        inner_index += 1;
+                    }
+                }
+                
+                statements.push(Statement::SwitchStatement {
+                    value,
+                    cases,
+                    default,
+                });
+            },
             _ => inner_index += 1,
         }
     }
@@ -1026,4 +1122,67 @@ fn parse_if_statement(
         body,
         else_branch,
     })
+}
+
+fn parse_case_block(tokens: &[Token], index: &mut usize) -> Result<Vec<Statement>, ParseError> {
+    let mut statements = Vec::new();
+    
+    while *index < tokens.len() {
+        if let Token::Keyword(kw) = &tokens[*index] {
+            if kw == "case" || kw == "default" || kw == "end" {
+                break;
+            }
+        }
+        
+        match &tokens[*index] {
+            Token::Keyword(kw) if kw == "var" => {
+                *index += 1;
+                let name = expect_identifier(&tokens, index)?;
+                expect_token_type(&tokens, index, "Equals")?;
+                let expr = parse_expression(&tokens, index)?;
+                statements.push(Statement::VarDeclarationExpr(name, expr));
+            },
+            Token::Identifier(name) => {
+                let var_name = name.clone();
+                *index += 1;
+                
+                if *index < tokens.len() && matches!(&tokens[*index], Token::Assign) {
+                    *index += 1;
+                    let expr = parse_expression(&tokens, index)?;
+                    statements.push(Statement::Assignment(var_name, expr));
+                }
+            },
+            Token::Keyword(kw) if kw == "break" => {
+                *index += 1;
+                statements.push(Statement::Break);
+            },
+            Token::Keyword(kw) if kw == "continue" => {
+                *index += 1;
+                statements.push(Statement::Continue);
+            },
+            Token::Keyword(kw) if kw == "return" => {
+                *index += 1;
+                let expr = parse_expression(&tokens, index)?;
+                statements.push(Statement::Return(expr));
+            },
+            Token::Keyword(kw) if kw == "if" => {
+                let statement = parse_if_statement(&tokens, index, &vec![])?;
+                statements.push(statement);
+            },
+            Token::Keyword(kw) if kw == "call" => {
+                *index += 1;
+                let name = expect_identifier(&tokens, index)?;
+                let args = parse_function_args(&tokens, index)?;
+                statements.push(Statement::CallFunction { name, args });
+            },
+            Token::Keyword(kw) if kw == "print" => {
+                *index += 1;
+                let expr = parse_expression(&tokens, index)?;
+                statements.push(Statement::Print(expr));
+            },
+            _ => *index += 1,
+        }
+    }
+    
+    Ok(statements)
 }
