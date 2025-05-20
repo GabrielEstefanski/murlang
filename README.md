@@ -6,8 +6,8 @@
 
 Murlang is an interpreted programming language with syntax based on "Murloc-speak". It incorporates modern programming concepts while maintaining the unique charm of Murloc communication:
 
-- Asynchronous Programming (`mrglasync`, `mrglawait`)
-- Parallel Programming with Threads (`splurg`, `mrglwait`)
+- Asynchronous Programming (`argl`, `mrgargl`)
+- Parallel Programming with Threads (`splurg`, `mrgurl`)
 - Higher-Order Functions
 - Complex Data Structures
 - Type System
